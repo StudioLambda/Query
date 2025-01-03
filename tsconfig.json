@@ -1,22 +1,13 @@
 {
-  "include": ["src"],
-  "exclude": ["dist"],
+  "files": [],
+  "references": [{ "path": "./src/query" }, { "path": "./src/react" }, { "path": "./src/solid" }],
   "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "Node",
-    "strict": true,
-    "sourceMap": true,
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "declaration": true,
-    "emitDeclarationOnly": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "isolatedModules": true,
-    "noImplicitAny": true,
-    "outDir": "./dist",
-    "rootDir": "./src"
+    "jsx": "preserve",
+    "baseUrl": ".",
+    "paths": {
+      "query:*": ["src/query/*"],
+      "query/react:*": ["./src/react/*"],
+      "query/solid:*": ["./src/solid/*"]
+    }
   }
 }

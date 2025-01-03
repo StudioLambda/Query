@@ -1,0 +1,33 @@
+{
+  "files": ["vitest.config.ts"],
+  "include": ["src/query/**/*", "src/react/**/*", "src/solid/**/*"],
+  "exclude": ["dist"],
+  "compilerOptions": {
+    "composite": false,
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "skipDefaultLibCheck": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "isolatedModules": true,
+    "noImplicitAny": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "jsx": "preserve",
+    "allowSyntheticDefaultImports": true,
+    "paths": {
+      "query:*": ["./src/query/*"],
+      "query/react:*": ["./src/react/*"],
+      "query/solid:*": ["./src/solid/*"]
+    }
+  }
+}

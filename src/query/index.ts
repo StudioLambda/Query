@@ -1,7 +1,7 @@
 /**
- * Determines the shape of the TurboCache instance.
+ * Determines the shape of the Cache instance.
  */
-export interface TurboCache<T = unknown> {
+export interface Cache<T = unknown> {
   /**
    * Gets an item from the cache.
    */
@@ -55,26 +55,37 @@ interface ResolversCacheItem<T> {
 
 /**
  * Represents the available configuration options
- * for a turbo query instance.
+ * for a query instance.
  */
-export interface TurboQueryConfiguration extends TurboQueryOptions {
+export interface Configuration extends Options {
   /**
    * Determines the resolved items cache to use.
    */
-  readonly itemsCache?: TurboCache<ItemsCacheItem<unknown>>
+  readonly itemsCache?: Cache<ItemsCacheItem>
 
   /**
    * Determines the resolvers cache to use.
    */
-  readonly resolversCache?: TurboCache<ResolversCacheItem<unknown>>
+  readonly resolversCache?: Cache<ResolversCacheItem<unknown>>
 
   /**
    * Stores the event system.
    */
   readonly events?: EventTarget
+
+  /**
+   * Broadcast channel. This is useful for communicating
+   * between tabs and windows (browser contexts).
+   *
+   * By default it does not use any broadcast channel.
+   * If a broadcast channel is provided, query
+   * won't close automatically, therefore, the responsability
+   * of closing the broadcast channel is up to the user.
+   */
+  readonly broadcast?: BroadcastChannel
 }
 
-export interface TurboFetcherAdditional {
+export interface FetcherAdditional {
   /**
    * An abort signal to cancel pending queries.
    */
@@ -82,20 +93,20 @@ export interface TurboFetcherAdditional {
 }
 
 /**
- * The available options for turbo query.
+ * The available options for query.
  */
-export interface TurboQueryOptions<T = unknown> {
+export interface Options<T = unknown> {
   /**
    * Determines the item deduplication interval.
    * This determines how many milliseconds an item
    * is considered valid.
    */
-  readonly expiration?: (item: T) => number
+  readonly expiration?: ExpirationFunction<T>
 
   /**
    * Determines the fetcher function to use.
    */
-  readonly fetcher?: (key: string, additional: TurboFetcherAdditional) => Promise<T>
+  readonly fetcher?: FetcherFunction<T>
 
   /**
    * Determines if we can return a stale item.
@@ -123,17 +134,91 @@ export interface TurboQueryOptions<T = unknown> {
 /**
  * Determines the cache type.
  */
-export type TurboCacheType = 'resolvers' | 'items'
+export type CacheType = 'resolvers' | 'items'
 
 /**
- * The turbo mutation function type.
+ * The mutation function type.
  */
-export type TurboMutateFunction<T> = (previous?: T, expiresAt?: Date) => T
+export interface MutationFunction<T> {
+  (previous?: T, expiresAt?: Date): T | Promise<T>
+}
 
 /**
  * The available mutation values.
  */
-export type TurboMutateValue<T> = T | TurboMutateFunction<T>
+export type MutationValue<T> = T | MutationFunction<T>
+
+/**
+ * The function type for the event subscription.
+ */
+export interface SubscribeFunction {
+  (key: string, event: QueryEvent, listener: EventListener): Unsubscriber
+}
+
+/**
+ * The broadcast payload.
+ */
+export interface BroadcastPayload {
+  /**
+   * The event name.
+   */
+  readonly event: string
+
+  /**
+   * The event detail.
+   */
+  readonly detail: unknown
+}
+
+/**
+ * The function type for the broadcast subscription.
+ */
+export interface SubscribeBroadcastFunction {
+  (): Unsubscriber
+}
+
+/**
+ * The query function type.
+ */
+export interface QueryFunction {
+  <T = unknown>(key: string, options?: Options<T>): Promise<T>
+}
+
+export interface ExpirationFunction<T = unknown> {
+  (item: T): number
+}
+
+export interface FetcherFunction<T = unknown> {
+  (key: string, additional: FetcherAdditional): Promise<T>
+}
+
+/**
+ * The mutate function options.
+ */
+export interface HydrateOptions<T = unknown> {
+  expiration?: ExpirationFunction<T>
+}
+
+/**
+ * The mutate function options.
+ */
+export interface MutateOptions<T = unknown> {
+  expiration?: ExpirationFunction<T>
+}
+
+/**
+ * The mutate function type.
+ */
+export interface MutateFunction {
+  <T = unknown>(key: string, item: MutationValue<T>, options?: MutateOptions<T>): Promise<T>
+}
+
+/**
+ * The hydrate function type.
+ */
+export interface HydrateFunction {
+  <T = unknown>(keys: string | string[], item: T, options?: HydrateOptions<T>): void
+}
 
 /**
  * The unsubscriber function.
@@ -141,51 +226,59 @@ export type TurboMutateValue<T> = T | TurboMutateFunction<T>
 export type Unsubscriber = () => void
 
 /**
- * The caches available on the turbo query.
+ * The caches available on the query.
  */
-export interface TurboCaches {
+export interface Caches {
   /**
    * A cache that contains the resolved items alongside
    * their expiration time.
    */
-  readonly items: TurboCache<ItemsCacheItem<unknown>>
+  readonly items: Cache<ItemsCacheItem>
 
   /**
    * A cache that contains the resolvers alongside
    * their abort controllers.
    */
-  readonly resolvers: TurboCache<ResolversCacheItem<unknown>>
+  readonly resolvers: Cache<ResolversCacheItem<unknown>>
 }
 
 /**
- * Represents the methods a turbo query
+ * Represents the methods a query
  * should implement.
  */
-export interface TurboQuery {
+export interface Query {
   /**
-   * Configures the current instance of turbo query.
+   * Configures the current instance of query.
    */
-  readonly configure: (options?: Partial<TurboQueryConfiguration>) => void
+  readonly configure: (options?: Partial<Configuration>) => void
 
   /**
    * Fetches the key information using a fetcher.
    * The returned promise contains the result item.
    */
-  readonly query: <T = unknown>(key: string, options?: TurboQueryOptions<T>) => Promise<T>
+  readonly query: QueryFunction
 
   /**
-   * Subscribes to a given event on a key. The event handler
+   * Subscribes to a given event & key. The event handler
    * does have a payload parameter that will contain relevant
    * information depending on the event type.
    */
-  readonly subscribe: (key: string, event: TurboQueryEvent, listener: EventListener) => Unsubscriber
+  readonly subscribe: SubscribeFunction
+
+  /**
+   * Subscribes to the broadcast channel
+   * to listen for other browser context
+   * events and reproduce them in the current
+   * context.
+   */
+  readonly subscribeBroadcast: SubscribeBroadcastFunction
 
   /**
    * Mutates the key with a given optimistic value.
    * The mutated value is considered expired and will be
    * replaced immediatly if a refetch happens.
    */
-  readonly mutate: <T = unknown>(key: string, item: TurboMutateValue<T>) => void
+  readonly mutate: MutateFunction
 
   /**
    * Aborts the active resolvers on each key
@@ -199,18 +292,18 @@ export interface TurboQuery {
    * Forgets the given keys from the cache.
    * Removes items from both, the cache and resolvers.
    */
-  readonly forget: (keys?: string | string[]) => void
+  readonly forget: (keys?: string | string[] | RegExp) => void
 
   /**
    * Hydrates the given keys on the cache
    * with the given value and expiration time.
    */
-  readonly hydrate: <T = unknown>(keys: string | string[], item: T, expiresAt?: Date) => void
+  readonly hydrate: HydrateFunction
 
   /**
    * Returns the given keys for the given cache.
    */
-  readonly keys: (cache?: TurboCacheType) => string[]
+  readonly keys: (cache?: CacheType) => string[]
 
   /**
    * Returns the expiration date of a given key item.
@@ -225,22 +318,28 @@ export interface TurboQuery {
   readonly snapshot: <T = unknown>(key: string) => T | undefined
 
   /**
-   * Returns the current cache instances.
+   * Returns the current cache instances in use.
    */
-  readonly caches: () => TurboCaches
+  readonly caches: () => Caches
 
   /**
-   * Returns the event system.
+   * Returns the event system in use.
    */
   readonly events: () => EventTarget
+
+  /**
+   * Returns the broadcast channel in use.
+   */
+  readonly broadcast: () => BroadcastChannel | undefined
 }
 
 /**
- * Available events on turbo query.
+ * Available events on query.
  */
-export type TurboQueryEvent =
+export type QueryEvent =
   | 'refetching'
   | 'resolved'
+  | 'mutating'
   | 'mutated'
   | 'aborted'
   | 'forgotten'
@@ -250,24 +349,24 @@ export type TurboQueryEvent =
 /**
  * Stores the default fetcher function.
  */
-export function defaultFetcher(
+export function defaultFetcher<T>(
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
-) {
-  return async function (key: string, { signal }: TurboFetcherAdditional) {
+): FetcherFunction<T> {
+  return async function (key: string, { signal }: FetcherAdditional): Promise<T> {
     const response = await fetch(key, { signal })
 
     if (!response.ok) {
       throw new Error('Unable to fetch the data: ' + response.statusText)
     }
 
-    return await response.json()
+    return (await response.json()) as T
   }
 }
 
 /**
- * Creates a new turbo query instance.
+ * Creates a new query instance.
  */
-export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): TurboQuery {
+export function createQuery(instanceOptions?: Configuration): Query {
   /**
    * Stores the default expiration function.
    */
@@ -278,7 +377,7 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
   /**
    * Stores the items cache.
    */
-  let itemsCache = instanceOptions?.itemsCache ?? new Map<string, ItemsCacheItem<unknown>>()
+  let itemsCache = instanceOptions?.itemsCache ?? new Map<string, ItemsCacheItem>()
 
   /**
    * Stores the resolvers cache.
@@ -290,6 +389,17 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
    * Event manager.
    */
   let events = instanceOptions?.events ?? new EventTarget()
+
+  /**
+   * Broadcast channel. This is useful for communicating
+   * between tabs and windows (browser contexts).
+   *
+   * By default it does not use any broadcast channel.
+   * If a broadcast channel is provided, query
+   * won't close automatically, therefore, the responsability
+   * of closing the broadcast channel is up to the user.
+   */
+  let broadcast = instanceOptions?.broadcast
 
   /**
    * Stores the expiration time of an item.
@@ -324,12 +434,13 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
   let instanceFresh = instanceOptions?.fresh ?? false
 
   /**
-   * Configures the current instance of turbo query.
+   * Configures the current instance of query.
    */
-  function configure(options?: TurboQueryConfiguration): void {
+  function configure(options?: Configuration): void {
     itemsCache = options?.itemsCache ?? itemsCache
     resolversCache = options?.resolversCache ?? resolversCache
     events = options?.events ?? events
+    broadcast = options?.broadcast ?? broadcast
     instanceExpiration = options?.expiration ?? instanceExpiration
     instanceFetcher = options?.fetcher ?? instanceFetcher
     instanceStale = options?.stale ?? instanceStale
@@ -338,24 +449,20 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
   }
 
   /**
-   * Subscribes to a given event on a key. The event handler
+   * Subscribes to a given keyed event. The event handler
    * does have a payload parameter that will contain relevant
    * information depending on the event type.
    * If there's a pending resolver for that key, the `refetching`
    * event is fired immediatly.
    */
-  function subscribe<T = unknown>(
-    key: string,
-    event: TurboQueryEvent,
-    listener: EventListener
-  ): () => void {
+  function subscribe(key: string, event: QueryEvent, listener: EventListener): Unsubscriber {
     events.addEventListener(`${event}:${key}`, listener)
     const value = resolversCache.get(key)
 
     // For the refetching event, we want to immediatly return if there's
     // a pending resolver.
     if (event === 'refetching' && value !== undefined) {
-      listener(new CustomEvent(`${event}:${key}`, { detail: value.item as Promise<T> }))
+      listener(new CustomEvent(`${event}:${key}`, { detail: value.item }))
     }
 
     return function () {
@@ -366,19 +473,45 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
   /**
    * Mutates the key with a given optimistic value.
    * The mutated value is considered expired and will be
-   * replaced immediatly if a refetch happens when no expiresAt
-   * is given. Otherwise the expiration time is used.
+   * replaced immediatly if a refetch happens when expired
+   * is true. If expired is false, the value expiration time
+   * is added as if it was a valid data refetched. Alternatively
+   * you can provide a Date to decide when the expiration happens.
    */
-  function mutate<T = unknown>(key: string, item: TurboMutateValue<T>, expiresAt?: Date): void {
-    if (typeof item === 'function') {
-      const fn = item as TurboMutateFunction<T>
-      const value = itemsCache.get(key)
+  async function mutate<T = unknown>(
+    key: string,
+    resolver: MutationValue<T>,
+    options?: MutateOptions<T>
+  ): Promise<T> {
+    async function action(resolver: MutationValue<T>) {
+      if (typeof resolver === 'function') {
+        const fn = resolver as MutationFunction<T>
+        const value = itemsCache.get(key)
 
-      item = fn(value?.item as T, value?.expiresAt)
+        resolver = await fn(value?.item as T, value?.expiresAt)
+      }
+
+      const expiresAt = new Date()
+
+      expiresAt.setMilliseconds(
+        expiresAt.getMilliseconds() + (options?.expiration?.(resolver) ?? 0)
+      )
+
+      itemsCache.set(key, { item: resolver, expiresAt: expiresAt })
+
+      return resolver
     }
 
-    itemsCache.set(key, { item, expiresAt: expiresAt ?? new Date() })
+    const result = action(resolver)
+
+    events.dispatchEvent(new CustomEvent(`mutating:${key}`, { detail: result }))
+
+    const item = await result
+
     events.dispatchEvent(new CustomEvent(`mutated:${key}`, { detail: item }))
+    broadcast?.postMessage({ event: `mutated:${key}`, detail: item })
+
+    return item
   }
 
   /**
@@ -392,7 +525,7 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
   /**
    * Determines if the given key is currently resolving.
    */
-  function keys(type: TurboCacheType = 'items'): string[] {
+  function keys(type: CacheType = 'items'): string[] {
     return Array.from(type === 'items' ? itemsCache.keys() : resolversCache.keys())
   }
 
@@ -405,7 +538,8 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
    */
   function abort(cacheKeys?: string | string[], reason?: unknown): void {
     const resolverKeys =
-      typeof cacheKeys === 'string' ? [cacheKeys] : cacheKeys ?? keys('resolvers')
+      typeof cacheKeys === 'string' ? [cacheKeys] : (cacheKeys ?? keys('resolvers'))
+
     for (const key of resolverKeys) {
       const resolver = resolversCache.get(key)
 
@@ -413,8 +547,8 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
         resolver.controller.abort(reason)
         resolversCache.delete(key)
 
-        //! Should it be reason instead of resolver.item ???
-        events.dispatchEvent(new CustomEvent(`aborted:${key}`, { detail: resolver.item }))
+        events.dispatchEvent(new CustomEvent(`aborted:${key}`, { detail: reason }))
+        broadcast?.postMessage({ event: `aborted:${key}`, detail: reason })
       }
     }
   }
@@ -424,14 +558,26 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
    * Does not remove any resolvers.
    * If no keys are provided the items cache is cleared.
    */
-  function forget(cacheKeys?: string | string[]): void {
-    const itemKeys = typeof cacheKeys === 'string' ? [cacheKeys] : cacheKeys ?? keys('items')
+  function forget(cacheKeys?: string | string[] | RegExp): void {
+    let itemKeys: string[]
+
+    if (typeof cacheKeys === 'string') {
+      itemKeys = [cacheKeys]
+    } else if (Array.isArray(cacheKeys)) {
+      itemKeys = cacheKeys
+    } else if (cacheKeys instanceof RegExp) {
+      itemKeys = keys('items').filter((key) => key.match(cacheKeys))
+    } else {
+      itemKeys = keys('items')
+    }
+
     for (const key of itemKeys) {
       const item = itemsCache.get(key)
 
       if (item !== undefined) {
         itemsCache.delete(key)
         events.dispatchEvent(new CustomEvent(`forgotten:${key}`, { detail: item.item }))
+        broadcast?.postMessage({ event: `forgotten:${key}`, detail: item.item })
       }
     }
   }
@@ -443,10 +589,18 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
    * Please use mutate() in most cases unless you
    * know what you are doing.
    */
-  function hydrate<T = unknown>(keys: string | string[], item: T, expiresAt?: Date): void {
+  function hydrate<T = unknown>(
+    keys: string | string[],
+    item: T,
+    options?: HydrateOptions<T>
+  ): void {
+    const expiresAt = new Date()
+    expiresAt.setMilliseconds(expiresAt.getMilliseconds() + (options?.expiration?.(item) ?? 0))
+
     for (const key of typeof keys === 'string' ? [keys] : keys) {
-      itemsCache.set(key, { item, expiresAt: expiresAt ?? new Date() })
+      itemsCache.set(key, { item, expiresAt: expiresAt })
       events.dispatchEvent(new CustomEvent(`hydrated:${key}`, { detail: item }))
+      broadcast?.postMessage({ event: `hydrated:${key}`, detail: item })
     }
   }
 
@@ -462,7 +616,7 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
    * Fetches the key information using a fetcher.
    * The returned promise contains the result item.
    */
-  async function query<T = unknown>(key: string, options?: TurboQueryOptions<T>): Promise<T> {
+  async function query<T = unknown>(key: string, options?: Options<T>): Promise<T> {
     /**
      * Stores the expiration time of an item.
      */
@@ -471,7 +625,7 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
     /**
      * Determines the fetcher function to use.
      */
-    const fetcher = options?.fetcher ?? instanceFetcher
+    const fetcher = (options?.fetcher ?? instanceFetcher) as FetcherFunction<T>
 
     /**
      * Determines if we can return a sale item
@@ -510,25 +664,36 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
         const controller = new AbortController()
 
         // Initiate the fetching request.
-        const result: Promise<T> = fetcher(key, { signal: controller.signal })
+        async function action() {
+          const result = fetcher(key, { signal: controller.signal })
+
+          // Awaits the fetching to get the result item.
+          const item = await result
+
+          // Removes the resolver from the cache.
+          resolversCache.delete(key)
+
+          // Create the expiration time for the item.
+          const expiresAt = new Date()
+          expiresAt.setMilliseconds(expiresAt.getMilliseconds() + expiration(item))
+
+          // Set the item to the cache.
+          itemsCache.set(key, { item, expiresAt })
+
+          return item
+        }
+
+        const result = action()
 
         // Adds the resolver to the cache.
         resolversCache.set(key, { item: result, controller })
         events.dispatchEvent(new CustomEvent(`refetching:${key}`, { detail: result }))
 
-        // Awaits the fetching to get the result item.
         const item = await result
 
-        // Removes the resolver from the cache.
-        resolversCache.delete(key)
-
-        // Create the expiration time for the item.
-        const expiresAt = new Date()
-        expiresAt.setMilliseconds(expiresAt.getMilliseconds() + expiration(item))
-
-        // Set the item to the cache.
-        itemsCache.set(key, { item, expiresAt })
+        // Notify of the resolved item.
         events.dispatchEvent(new CustomEvent(`resolved:${key}`, { detail: item }))
+        broadcast?.postMessage({ event: `resolved:${key}`, detail: item })
 
         // Return back the item.
         return item
@@ -543,6 +708,7 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
 
         // Notify of the error.
         events.dispatchEvent(new CustomEvent(`error:${key}`, { detail: error }))
+        broadcast?.postMessage({ event: `error:${key}`, detail: error })
 
         // Throw back the error.
         throw error
@@ -593,7 +759,7 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
   /**
    * Returns the current cache instances.
    */
-  function caches(): TurboCaches {
+  function caches(): Caches {
     return { items: itemsCache, resolvers: resolversCache }
   }
 
@@ -604,9 +770,35 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
     return events
   }
 
+  /**
+   * Returns the broadcast channel.
+   */
+  function localBroadcast() {
+    return broadcast
+  }
+
+  /**
+   * Subscribes to the broadcast channel
+   * to listen for other browser context
+   * events and reproduce them in the current
+   * context.
+   */
+  function subscribeBroadcast(): Unsubscriber {
+    function onBroadcastMessage(message: MessageEvent<BroadcastPayload>) {
+      events.dispatchEvent(new CustomEvent(message.data.event, { detail: message.data.detail }))
+    }
+
+    broadcast?.addEventListener('message', onBroadcastMessage)
+
+    return function () {
+      broadcast?.removeEventListener('message', onBroadcastMessage)
+    }
+  }
+
   return {
     query,
     subscribe,
+    subscribeBroadcast,
     mutate,
     configure,
     abort,
@@ -617,5 +809,6 @@ export function createTurboQuery(instanceOptions?: TurboQueryConfiguration): Tur
     snapshot,
     caches,
     events: localEvents,
+    broadcast: localBroadcast,
   }
 }

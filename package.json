@@ -1,6 +1,6 @@
 {
-  "name": "turbo-query",
-  "version": "2.2.0",
+  "name": "@studiolambda/query",
+  "version": "1.0.0",
   "license": "MIT",
   "description": "Lightweight, isomorphic and framework agnostic asynchronous data management for modern UIs",
   "author": {
@@ -12,14 +12,20 @@
     "node": ">=18.0.0"
   },
   "type": "module",
-  "types": "./dist/turbo-query.d.ts",
-  "main": "./dist/turbo-query.umd.cjs",
-  "module": "./dist/turbo-query.js",
+  "types": "./dist/src/query/query.d.ts",
+  "main": "./dist/query.cjs",
+  "module": "./dist/query.js",
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "import": "./dist/turbo-query.js",
-      "require": "./dist/turbo-query.umd.cjs"
+      "types": "./dist/src/query/index.d.ts",
+      "import": "./dist/query.js",
+      "require": "./dist/query.cjs"
+    },
+    "./react": {
+      "types": "./dist/src/react/index.d.ts",
+      "import": "./dist/query_react.js",
+      "require": "./dist/query_react.cjs"
     }
   },
   "files": [
@@ -27,22 +33,52 @@
     "package.json"
   ],
   "scripts": {
-    "build": "vite build && tsc --skipLibCheck",
+    "build": "vite build",
     "dev": "vitest",
     "test": "vitest run",
     "test:ui": "vitest --ui --coverage",
     "test:cover": "vitest run --coverage",
     "prepack": "npm run build"
   },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "solid-js": "^1.9.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "solid-js": {
+      "optional": true
+    }
+  },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^7.5.0",
-    "@typescript-eslint/parser": "^7.5.0",
-    "@vitest/coverage-v8": "^1.4.0",
-    "@vitest/ui": "^1.4.0",
-    "eslint": "^8.57.0",
-    "typescript": "^5.4.4",
-    "typescript-eslint": "^7.5.0",
-    "vite": "^5.2.8",
-    "vitest": "^1.4.0"
+    "@types/node": "^22.10.2",
+    "@types/react": "19.0.1",
+    "@types/react-dom": "19.0.2",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/ui": "^2.1.8",
+    "eslint": "^9.16.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-refresh": "^0.4.16",
+    "eslint-plugin-solid": "^0.14.5",
+    "globals": "^15.13.0",
+    "happy-dom": "^15.11.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "solid-js": "^1.9.3",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vite": "^6.0.3",
+    "vite-plugin-dts": "^4.3.0",
+    "vite-plugin-solid": "^2.11.0",
+    "vitest": "^2.1.8"
   }
 }

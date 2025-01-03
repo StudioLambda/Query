@@ -1,18 +1,12 @@
-import { expect, it, vi } from 'vitest'
-import { createTurboQuery, defaultFetcher, TurboFetcherAdditional } from '../src/turbo-query'
-
-it.concurrent('can create a turbo query', async ({ expect }) => {
-  const turboquery = createTurboQuery()
-
-  expect(turboquery).not.toBeNull()
-})
+import { it, vi } from 'vitest'
+import { createQuery, defaultFetcher, FetcherAdditional } from 'query:index'
 
 it.concurrent('can query resources', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query } = createTurboQuery({ fetcher })
+  const { query } = createQuery({ fetcher })
 
   const resource = await query<string>('example-key')
 
@@ -20,25 +14,29 @@ it.concurrent('can query resources', async ({ expect }) => {
 })
 
 it.concurrent('can fetch expired resources while returning stale', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query } = createTurboQuery({ fetcher, expiration: () => 100 })
+  const { query } = createQuery({ fetcher, expiration: () => 100 })
 
   await query<string>('example-key')
-  await new Promise((r) => setTimeout(r, 100))
+
+  await new Promise((resolve) => {
+    setTimeout(resolve, 100)
+  })
+
   const resource = await query<string>('example-key')
 
   expect(resource).toBe('example')
 })
 
 it.concurrent('can fetch expired resources while not returning stale', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query } = createTurboQuery({ fetcher, expiration: () => 100 })
+  const { query } = createQuery({ fetcher, expiration: () => 100 })
 
   await query<string>('example-key')
   await new Promise((r) => setTimeout(r, 100))
@@ -55,9 +53,9 @@ it.concurrent('returns the same promise when resources are resolving', async ({ 
     return 'example'
   }
 
-  const { query } = createTurboQuery({ fetcher })
+  const { query } = createQuery({ fetcher })
 
-  query<string>('example-key')
+  void query<string>('example-key')
   await query<string>('example-key')
 
   expect(times).toBe(1)
@@ -65,12 +63,12 @@ it.concurrent('returns the same promise when resources are resolving', async ({ 
 
 it.concurrent('does respect dedupe interval of resources', async ({ expect }) => {
   let times = 0
-  async function fetcher() {
+  function fetcher() {
     times++
-    return 'example'
+    return Promise.resolve('example')
   }
 
-  const { query } = createTurboQuery({ fetcher, expiration: () => 0 })
+  const { query } = createQuery({ fetcher, expiration: () => 0 })
 
   await query<string>('example-key')
   await new Promise((r) => setTimeout(r, 100))
@@ -81,12 +79,12 @@ it.concurrent('does respect dedupe interval of resources', async ({ expect }) =>
 
 it.concurrent('does respect dedupe interval of resources 2', async ({ expect }) => {
   let times = 0
-  async function fetcher() {
+  function fetcher() {
     times++
-    return 'example'
+    return Promise.resolve('example')
   }
 
-  const { query } = createTurboQuery({ fetcher, expiration: () => 100 })
+  const { query } = createQuery({ fetcher, expiration: () => 100 })
 
   await query<string>('example-key')
   await query<string>('example-key')
@@ -95,54 +93,56 @@ it.concurrent('does respect dedupe interval of resources 2', async ({ expect }) 
 })
 
 it.concurrent('can subscribe to refetchings on resources', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query, subscribe } = createTurboQuery({ fetcher, expiration: () => 0 })
+  const { query, subscribe } = createQuery({ fetcher, expiration: () => 0 })
 
-  let result: string | undefined = undefined
+  let result: Promise<string> | undefined = undefined
   const unsubscribe = subscribe(
     'example-key',
     'refetching',
-    async function (event: CustomEventInit<Promise<string>>) {
-      result = await event.detail
+    function (event: CustomEventInit<Promise<string>>) {
+      result = event.detail
     }
   )
   await query('example-key', { fetcher })
   unsubscribe()
 
-  expect(result).toBe('example')
+  expect(result).not.toBeUndefined()
+  await expect(result).resolves.toBe('example')
 })
 
 it.concurrent('can subscribe to refetchings on pending resources', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query, subscribe } = createTurboQuery({ fetcher, expiration: () => 0 })
+  const { query, subscribe } = createQuery({ fetcher, expiration: () => 0 })
   const r = query('example-key', { fetcher })
 
-  let result: string | undefined = undefined
+  let result: Promise<string> | undefined = undefined
   const unsubscribe = subscribe(
     'example-key',
     'refetching',
-    async function (event: CustomEventInit<Promise<string>>) {
-      result = await event.detail
+    function (event: CustomEventInit<Promise<string>>) {
+      result = event.detail
     }
   )
   await r
   unsubscribe()
 
-  expect(result).toBe('example')
+  expect(result).not.toBeUndefined()
+  await expect(result).resolves.toBe('example')
 })
 
 it.concurrent('can subscribe to resolutions on resources', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query, subscribe } = createTurboQuery({ fetcher, expiration: () => 0 })
+  const { query, subscribe } = createQuery({ fetcher, expiration: () => 0 })
 
   let result: string | undefined = undefined
   const unsubscribe = subscribe(
@@ -155,15 +155,16 @@ it.concurrent('can subscribe to resolutions on resources', async ({ expect }) =>
 
   await query('example-key', { fetcher })
   unsubscribe()
+
   expect(result).toBe('example')
 })
 
 it.concurrent('can subscribe to mutations on resources', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query, subscribe, mutate } = createTurboQuery({ fetcher })
+  const { query, subscribe, mutate } = createQuery({ fetcher })
 
   const current = await query('example-key', { fetcher })
 
@@ -178,24 +179,24 @@ it.concurrent('can subscribe to mutations on resources', async ({ expect }) => {
     }
   )
 
-  mutate('example-key', 'mutated-example')
+  await mutate('example-key', 'mutated-example')
   unsubscribe()
 
   expect(result).toBe('mutated-example')
 })
 
 it.concurrent('can mutate non-existing cache keys when using a fn', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query, mutate } = createTurboQuery({ fetcher })
+  const { query, mutate } = createQuery({ fetcher })
 
   const current = await query('example-key', { fetcher })
 
   expect(current).toBe('example')
 
-  mutate('example-key-2', () => 'mutated-example')
+  await mutate('example-key-2', () => 'mutated-example')
 
   const result = await query('example-key-2', { fetcher })
 
@@ -203,11 +204,11 @@ it.concurrent('can mutate non-existing cache keys when using a fn', async ({ exp
 })
 
 it.concurrent('can subscribe to mutations on resources 2', async ({ expect }) => {
-  async function fetcher() {
-    return 1
+  function fetcher() {
+    return Promise.resolve(1)
   }
 
-  const { query, subscribe, mutate } = createTurboQuery({ fetcher })
+  const { query, subscribe, mutate } = createQuery({ fetcher })
 
   const current = await query('example-key', { fetcher })
 
@@ -217,32 +218,34 @@ it.concurrent('can subscribe to mutations on resources 2', async ({ expect }) =>
   const unsubscribe = subscribe(
     'example-key',
     'mutated',
-    async function (event: CustomEventInit<number>) {
+    function (event: CustomEventInit<number>) {
       result = event.detail
     }
   )
 
-  mutate<number>('example-key', (old) => (old ?? 0) + 1)
+  await mutate<number>('example-key', (old) => (old ?? 0) + 1)
   unsubscribe()
 
   expect(result).toBe(2)
 })
 
 it.concurrent('can subscribe to aborts on resources', async ({ expect }) => {
-  function fetcher(_key: string, { signal }: TurboFetcherAdditional) {
+  const err = new Error('aborted')
+
+  function fetcher(_key: string, { signal }: FetcherAdditional) {
     return new Promise(function (resolve, reject) {
       signal.addEventListener('abort', function () {
-        reject('aborted')
+        reject(err)
       })
-      new Promise((r) => setTimeout(r, 200)).then(function () {
+      void new Promise((r) => setTimeout(r, 200)).then(function () {
         resolve('example')
       })
     })
   }
 
-  const { query, subscribe, abort } = createTurboQuery({ fetcher, expiration: () => 0 })
+  const { query, subscribe, abort } = createQuery({ fetcher, expiration: () => 0 })
 
-  let result: Promise<string> | undefined = undefined
+  let result = undefined
   const unsubscribe = subscribe(
     'example-key',
     'aborted',
@@ -255,16 +258,49 @@ it.concurrent('can subscribe to aborts on resources', async ({ expect }) => {
   abort()
   unsubscribe()
 
-  await expect(() => r).rejects.toThrowError('aborted')
-  await expect(() => result).rejects.toThrowError('aborted')
+  await expect(() => r).rejects.toThrowError(err)
+  expect(result).toBeNull()
+})
+
+it.concurrent('can subscribe to aborts on resources with custom reason', async ({ expect }) => {
+  const err = new Error('aborted')
+
+  function fetcher(_key: string, { signal }: FetcherAdditional) {
+    return new Promise(function (resolve, reject) {
+      signal.addEventListener('abort', function () {
+        reject(err)
+      })
+      void new Promise((r) => setTimeout(r, 200)).then(function () {
+        resolve('example')
+      })
+    })
+  }
+
+  const { query, subscribe, abort } = createQuery({ fetcher, expiration: () => 0 })
+
+  let result = undefined
+  const unsubscribe = subscribe(
+    'example-key',
+    'aborted',
+    function (event: CustomEventInit<Promise<string>>) {
+      result = event.detail
+    }
+  )
+
+  const r = query('example-key', { fetcher })
+  abort(undefined, 'failed')
+  unsubscribe()
+
+  await expect(r).rejects.toThrowError(err)
+  expect(result).toEqual('failed')
 })
 
 it.concurrent('can subscribe to forgets on resources', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query, subscribe, forget, keys } = createTurboQuery({ fetcher })
+  const { query, subscribe, forget, keys } = createQuery({ fetcher })
 
   const current = await query('example-key', { fetcher })
 
@@ -287,11 +323,11 @@ it.concurrent('can subscribe to forgets on resources', async ({ expect }) => {
 })
 
 it.concurrent('can subscribe to hydrates on resources', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query, subscribe, hydrate, keys } = createTurboQuery({ fetcher })
+  const { query, subscribe, hydrate, keys } = createQuery({ fetcher })
 
   const current = await query('example-key', { fetcher })
 
@@ -301,7 +337,7 @@ it.concurrent('can subscribe to hydrates on resources', async ({ expect }) => {
   const unsubscribe = subscribe(
     'example-key',
     'hydrated',
-    async function (event: CustomEventInit<string>) {
+    function (event: CustomEventInit<string>) {
       result = event.detail
     }
   )
@@ -313,12 +349,12 @@ it.concurrent('can subscribe to hydrates on resources', async ({ expect }) => {
   expect(keys('items')).toHaveLength(1)
 })
 
-it.concurrent('can reconfigure turbo query', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+it.concurrent('can reconfigure query', async ({ expect }) => {
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query, configure } = createTurboQuery({ fetcher })
+  const { query, configure } = createQuery({ fetcher })
 
   configure({
     itemsCache: new Map(),
@@ -328,8 +364,8 @@ it.concurrent('can reconfigure turbo query', async ({ expect }) => {
       return 5000
     },
     stale: false,
-    async fetcher() {
-      return 'different'
+    fetcher() {
+      return Promise.resolve('different')
     },
     removeOnError: true,
     fresh: true,
@@ -340,12 +376,12 @@ it.concurrent('can reconfigure turbo query', async ({ expect }) => {
   expect(result).toBe('different')
 })
 
-it.concurrent('can reconfigure turbo query 2', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+it.concurrent('can reconfigure query 2', async ({ expect }) => {
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query, configure } = createTurboQuery({ fetcher })
+  const { query, configure } = createQuery({ fetcher })
 
   configure()
 
@@ -354,69 +390,75 @@ it.concurrent('can reconfigure turbo query 2', async ({ expect }) => {
   expect(result).toBe('example')
 })
 
-it.concurrent('can abort turbo query', async ({ expect }) => {
-  function fetcher(_key: string, { signal }: TurboFetcherAdditional) {
+it.concurrent('can abort query', async ({ expect }) => {
+  const err = new Error('aborted')
+
+  function fetcher(_key: string, { signal }: FetcherAdditional) {
     return new Promise(function (resolve, reject) {
       signal.addEventListener('abort', function () {
-        reject('aborted')
+        reject(err)
       })
-      new Promise((r) => setTimeout(r, 200)).then(function () {
+      void new Promise((r) => setTimeout(r, 200)).then(function () {
         resolve('example')
       })
     })
   }
 
-  const { query, abort } = createTurboQuery({ fetcher })
+  const { query, abort } = createQuery({ fetcher })
   const result = query<string>('example-key')
   abort('example-key')
 
-  await expect(() => result).rejects.toThrowError('aborted')
+  await expect(() => result).rejects.toThrowError(err)
 })
 
-it.concurrent('can abort turbo query 2', async ({ expect }) => {
-  function fetcher(_key: string, { signal }: TurboFetcherAdditional) {
+it.concurrent('can abort query 2', async ({ expect }) => {
+  const err = new Error('aborted')
+
+  function fetcher(_key: string, { signal }: FetcherAdditional) {
     return new Promise(function (resolve, reject) {
       signal.addEventListener('abort', function () {
-        reject('aborted')
+        reject(err)
       })
-      new Promise((r) => setTimeout(r, 200)).then(function () {
+      void new Promise((r) => setTimeout(r, 200)).then(function () {
         resolve('example')
       })
     })
   }
 
-  const { query, abort } = createTurboQuery({ fetcher })
+  const { query, abort } = createQuery({ fetcher })
   const result = query<string>('example-key')
   abort(['example-key'])
 
-  await expect(() => result).rejects.toThrowError('aborted')
+  await expect(() => result).rejects.toThrowError(err)
 })
 
-it.concurrent('can abort turbo query 3', async ({ expect }) => {
-  function fetcher(_key: string, { signal }: TurboFetcherAdditional) {
+it.concurrent('can abort query 3', async ({ expect }) => {
+  const err = new Error('aborted')
+
+  function fetcher(_key: string, { signal }: FetcherAdditional) {
     return new Promise(function (resolve, reject) {
       signal.addEventListener('abort', function () {
-        reject('aborted')
+        reject(err)
       })
-      new Promise((r) => setTimeout(r, 200)).then(function () {
+      void new Promise((r) => setTimeout(r, 200)).then(function () {
         resolve('example')
       })
     })
   }
 
-  const { query, abort } = createTurboQuery({ fetcher })
+  const { query, abort } = createQuery({ fetcher })
   const result = query<string>('example-key')
   abort()
 
-  await expect(() => result).rejects.toThrowError('aborted')
+  await expect(() => result).rejects.toThrowError(err)
 })
 
-it.concurrent('can get the item keys of a turbo query', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+it.concurrent('can get the item keys of a query', async ({ expect }) => {
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query, keys } = createTurboQuery({ fetcher })
+  const { query, keys } = createQuery({ fetcher })
   await query<string>('foo')
   await query<string>('bar')
   const items = keys('items')
@@ -426,15 +468,15 @@ it.concurrent('can get the item keys of a turbo query', async ({ expect }) => {
   expect(items).toContain('bar')
 })
 
-it.concurrent('can get the resolvers keys of a turbo query', async ({ expect }) => {
+it.concurrent('can get the resolvers keys of a query', ({ expect }) => {
   async function fetcher() {
     await new Promise((r) => setTimeout(r, 250))
     return 'example'
   }
 
-  const { query, keys } = createTurboQuery({ fetcher })
-  query<string>('foo')
-  query<string>('bar')
+  const { query, keys } = createQuery({ fetcher })
+  void query<string>('foo')
+  void query<string>('bar')
   const resolvers = keys('resolvers')
 
   expect(resolvers).toHaveLength(2)
@@ -442,12 +484,12 @@ it.concurrent('can get the resolvers keys of a turbo query', async ({ expect }) 
   expect(resolvers).toContain('bar')
 })
 
-it.concurrent('can forget a turbo query key', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+it.concurrent('can forget a query key', async ({ expect }) => {
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query, forget, keys } = createTurboQuery({ fetcher })
+  const { query, forget, keys } = createQuery({ fetcher })
   await query<string>('example-key')
 
   expect(keys('items')).toContain('example-key')
@@ -455,12 +497,12 @@ it.concurrent('can forget a turbo query key', async ({ expect }) => {
   expect(keys('items')).toHaveLength(0)
 })
 
-it.concurrent('can forget a turbo query key 2', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+it.concurrent('can forget a query key 2', async ({ expect }) => {
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query, forget, keys } = createTurboQuery({ fetcher })
+  const { query, forget, keys } = createQuery({ fetcher })
   await query<string>('example-key')
 
   expect(keys('items')).toContain('example-key')
@@ -468,12 +510,12 @@ it.concurrent('can forget a turbo query key 2', async ({ expect }) => {
   expect(keys('items')).toHaveLength(0)
 })
 
-it.concurrent('can forget a turbo query key 3', async ({ expect }) => {
-  async function fetcher() {
-    return 'example'
+it.concurrent('can forget a query key 3', async ({ expect }) => {
+  function fetcher() {
+    return Promise.resolve('example')
   }
 
-  const { query, forget, keys } = createTurboQuery({ fetcher })
+  const { query, forget, keys } = createQuery({ fetcher })
   await query<string>('example-key')
 
   expect(keys('items')).toContain('example-key')
@@ -482,30 +524,30 @@ it.concurrent('can forget a turbo query key 3', async ({ expect }) => {
 })
 
 it.concurrent('removes resolver when query fails', async ({ expect }) => {
-  async function fetcher(): Promise<string> {
+  function fetcher(): Promise<string> {
     throw new Error('foo')
   }
 
-  async function fetcher2() {
-    return 'example'
+  function fetcher2() {
+    return Promise.resolve('example')
   }
 
-  const { query } = createTurboQuery({ expiration: () => 0 })
+  const { query } = createQuery({ expiration: () => 0 })
 
   await expect(query<string>('example-key', { fetcher })).rejects.toThrowError('foo')
   await expect(query<string>('example-key', { fetcher: fetcher2 })).resolves.toBe('example')
 })
 
 it.concurrent('removes items if specified when query fails', async ({ expect }) => {
-  async function fetcher(): Promise<string> {
+  function fetcher(): Promise<string> {
     throw new Error('foo')
   }
 
-  async function fetcher2() {
-    return 'example'
+  function fetcher2() {
+    return Promise.resolve('example')
   }
 
-  const { query, keys } = createTurboQuery({ expiration: () => 0 })
+  const { query, keys } = createQuery({ expiration: () => 0 })
 
   await query<string>('example-key', { fetcher: fetcher2 })
   expect(keys('items')).toContain('example-key')
@@ -516,11 +558,11 @@ it.concurrent('removes items if specified when query fails', async ({ expect }) 
 })
 
 it.concurrent('can subscribe to errors', async ({ expect }) => {
-  async function fetcher(): Promise<string> {
+  function fetcher(): Promise<string> {
     throw new Error('foo')
   }
 
-  const { query, subscribe } = createTurboQuery({ fetcher, expiration: () => 0 })
+  const { query, subscribe } = createQuery({ fetcher, expiration: () => 0 })
 
   let err: Error | undefined
   subscribe('example-key', 'error', function (event: CustomEventInit<Error>) {
@@ -534,12 +576,12 @@ it.concurrent('can subscribe to errors', async ({ expect }) => {
 
 it.concurrent('can give a fresh instance if needed', async ({ expect }) => {
   let times = 0
-  async function fetcher() {
+  function fetcher() {
     times++
-    return 'example'
+    return Promise.resolve('example')
   }
 
-  const { query } = createTurboQuery({ fetcher, expiration: () => 1000 })
+  const { query } = createQuery({ fetcher, expiration: () => 1000 })
 
   await query('example-key')
   expect(times).toBe(1)
@@ -557,7 +599,7 @@ it.concurrent('uses stale data while resolving', async ({ expect }) => {
     }
   }
 
-  const { query } = createTurboQuery({ expiration: () => 0 })
+  const { query } = createQuery({ expiration: () => 0 })
 
   const data = await query('example-key', { fetcher: fetcher(false) })
   expect(data).toBe('example-fast')
@@ -575,11 +617,11 @@ it.concurrent('uses stale data while resolving', async ({ expect }) => {
 })
 
 it.concurrent('can get expiration date of items', async ({ expect }) => {
-  async function fetcher() {
-    return 'foo'
+  function fetcher() {
+    return Promise.resolve('foo')
   }
 
-  const { query, expiration } = createTurboQuery({ fetcher })
+  const { query, expiration } = createQuery({ fetcher })
 
   await query('example-key')
 
@@ -588,16 +630,16 @@ it.concurrent('can get expiration date of items', async ({ expect }) => {
 })
 
 it.concurrent('can hydrate keys', async ({ expect }) => {
-  async function fetcher() {
-    return 'foo'
+  function fetcher() {
+    return Promise.resolve('foo')
   }
 
-  const { query, hydrate } = createTurboQuery({ fetcher, expiration: () => 1000 })
+  const { query, hydrate } = createQuery({ fetcher, expiration: () => 1000 })
 
-  const expiresAt = new Date()
-  expiresAt.setMilliseconds(expiresAt.getMilliseconds() + 1000)
+  hydrate('example-key', 'bar', {
+    expiration: () => 1000,
+  })
 
-  hydrate('example-key', 'bar', expiresAt)
   const result = await query('example-key')
   const result2 = await query('example-key')
 
@@ -606,11 +648,11 @@ it.concurrent('can hydrate keys', async ({ expect }) => {
 })
 
 it.concurrent('can hydrate keys without expiration', async ({ expect }) => {
-  async function fetcher() {
-    return 'foo'
+  function fetcher() {
+    return Promise.resolve('foo')
   }
 
-  const { query, hydrate } = createTurboQuery({ fetcher, expiration: () => 1000 })
+  const { query, hydrate } = createQuery({ fetcher, expiration: () => 1000 })
 
   hydrate('example-key', 'bar')
   // Stale hydrated result (because no expiration given)
@@ -622,16 +664,16 @@ it.concurrent('can hydrate keys without expiration', async ({ expect }) => {
 })
 
 it.concurrent('can hydrate multiple keys', async ({ expect }) => {
-  async function fetcher() {
-    return 'foo'
+  function fetcher() {
+    return Promise.resolve('foo')
   }
 
-  const { query, hydrate } = createTurboQuery({ fetcher, expiration: () => 1000 })
+  const { query, hydrate } = createQuery({ fetcher, expiration: () => 1000 })
 
-  const expiresAt = new Date()
-  expiresAt.setMilliseconds(expiresAt.getMilliseconds() + 1000)
+  hydrate(['example-key', 'example-key2'], 'bar', {
+    expiration: () => 1000,
+  })
 
-  hydrate(['example-key', 'example-key2'], 'bar', expiresAt)
   const result = await query('example-key')
   const result2 = await query('example-key2')
   const result3 = await query('example-key')
@@ -643,30 +685,41 @@ it.concurrent('can hydrate multiple keys', async ({ expect }) => {
   expect(result4).toBe('bar')
 })
 
-it.concurrent('can use the default fetcher', async () => {
+it.concurrent('can use the default fetcher', async ({ expect }) => {
   const mockedFetch = vi.fn(fetch)
 
   mockedFetch.mockReturnValueOnce(
-    new Promise((resolve) => resolve(new Response(JSON.stringify({ data: 'example' }))))
+    Promise.resolve(new Response(JSON.stringify({ data: 'example' })))
   )
 
   const fetcher = defaultFetcher(mockedFetch)
 
-  const { query } = createTurboQuery({ fetcher })
+  const { query } = createQuery({ fetcher })
 
   await expect(query<{ data: string }>('example')).resolves.toEqual({ data: 'example' })
 })
 
-it.concurrent('can use the default fetcher when fails', async () => {
+it.concurrent('can use the default fetcher when fails', async ({ expect }) => {
   const mockedFetch = vi.fn(fetch)
 
-  mockedFetch.mockReturnValueOnce(
-    new Promise((resolve) => resolve(new Response(undefined, { status: 500 })))
-  )
+  mockedFetch.mockReturnValueOnce(Promise.resolve(new Response(undefined, { status: 500 })))
 
   const fetcher = defaultFetcher(mockedFetch)
 
-  const { query } = createTurboQuery({ fetcher })
+  const { query } = createQuery({ fetcher })
 
   await expect(query<{ data: string }>('example')).rejects.toThrowError()
+})
+
+it.concurrent('can use regex to forget the keys', ({ expect }) => {
+  const { hydrate, forget, keys } = createQuery()
+
+  hydrate(['first', 'first/second', 'second/first', 'second'], 0)
+  forget(/^first(.*)/g)
+
+  expect(keys('items')).toHaveLength(2)
+  expect(keys('items')).not.toContain('first')
+  expect(keys('items')).not.toContain('first/second')
+  expect(keys('items')).toContain('second')
+  expect(keys('items')).toContain('second/first')
 })
