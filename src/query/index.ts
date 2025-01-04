@@ -41,7 +41,7 @@ interface ItemsCacheItem<T = unknown> {
 /**
  * Determines how we store items in the resolvers cache.
  */
-interface ResolversCacheItem<T> {
+interface ResolversCacheItem<T = unknown> {
   /**
    * The resolvable item.
    */
@@ -66,7 +66,7 @@ export interface Configuration extends Options {
   /**
    * Determines the resolvers cache to use.
    */
-  readonly resolversCache?: Cache<ResolversCacheItem<unknown>>
+  readonly resolversCache?: Cache<ResolversCacheItem>
 
   /**
    * Stores the event system.
@@ -239,7 +239,7 @@ export interface Caches {
    * A cache that contains the resolvers alongside
    * their abort controllers.
    */
-  readonly resolvers: Cache<ResolversCacheItem<unknown>>
+  readonly resolvers: Cache<ResolversCacheItem>
 }
 
 /**
@@ -382,8 +382,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
   /**
    * Stores the resolvers cache.
    */
-  let resolversCache =
-    instanceOptions?.resolversCache ?? new Map<string, ResolversCacheItem<unknown>>()
+  let resolversCache = instanceOptions?.resolversCache ?? new Map<string, ResolversCacheItem>()
 
   /**
    * Event manager.
