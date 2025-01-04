@@ -2,6 +2,18 @@
   "name": "@studiolambda/query",
   "version": "1.0.0",
   "license": "MIT",
+  "keywords": [
+    "stale-while-revalidate",
+    "swr",
+    "react-query",
+    "isomorphic",
+    "fetch",
+    "query",
+    "data-management",
+    "ui",
+    "vanilla",
+    "react"
+  ],
   "description": "Lightweight, isomorphic and framework agnostic asynchronous data management for modern UIs",
   "author": {
     "name": "Erik C. Forés",
