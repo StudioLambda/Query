@@ -12,7 +12,7 @@
     "node": ">=18.0.0"
   },
   "type": "module",
-  "types": "./dist/src/query/query.d.ts",
+  "types": "./dist/src/query/index.d.ts",
   "main": "./dist/query.cjs",
   "module": "./dist/query.js",
   "exports": {
