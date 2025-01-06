@@ -68,6 +68,7 @@ export function useQuery<T = unknown>(key: string, options?: ResourceOptions<T>)
   const clearOnForget = useMemo(clearOnForgetHandler, [options, additional])
 
   async function promiseHandler() {
+    console.log('trigger query!')
     return await query<T>(key, options)
   }
 
