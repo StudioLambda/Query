@@ -317,6 +317,10 @@ export interface Query {
    */
   readonly snapshot: <T = unknown>(key: string) => T | undefined
 
+  // stream is a generator that is able to stream events
+  // as they come in.
+  // readonly stream: (key: string, event: string) => AsyncGenerator<Promise<Event>>
+
   /**
    * Returns the current cache instances in use.
    */
