@@ -162,7 +162,7 @@ export interface BroadcastPayload {
   /**
    * The event name.
    */
-  readonly event: string
+  readonly event: QueryEvent
 
   /**
    * The event detail.
@@ -317,9 +317,14 @@ export interface Query {
    */
   readonly snapshot: <T = unknown>(key: string) => T | undefined
 
-  // stream is a generator that is able to stream events
-  // as they come in.
-  // readonly stream: (key: string, event: string) => AsyncGenerator<Promise<Event>>
+  // Returns the first event on the given key that happens.
+  //
+  // It does so by subscribing and unsubscribing after event has
+  // been emitted.
+  readonly once: (key: string, event: QueryEvent) => Promise<Event>
+
+  // A generator that is able to stream events as they come in.
+  readonly stream: (key: string, event: QueryEvent) => AsyncGenerator<Event>
 
   /**
    * Returns the current cache instances in use.
@@ -798,6 +803,21 @@ export function createQuery(instanceOptions?: Configuration): Query {
     }
   }
 
+  async function once(key: string, event: QueryEvent): Promise<Event> {
+    return new Promise<Event>(function (resolve) {
+      const unsubscribe = subscribe(key, event, function (event) {
+        resolve(event)
+        unsubscribe()
+      })
+    })
+  }
+
+  async function* stream(key: string, event: QueryEvent) {
+    for (;;) {
+      yield await once(key, event)
+    }
+  }
+
   return {
     query,
     subscribe,
@@ -810,6 +830,8 @@ export function createQuery(instanceOptions?: Configuration): Query {
     expiration,
     hydrate,
     snapshot,
+    once,
+    stream,
     caches,
     events: localEvents,
     broadcast: localBroadcast,
