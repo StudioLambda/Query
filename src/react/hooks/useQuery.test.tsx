@@ -1,45 +1,67 @@
 import { describe, it } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
 import { useQuery } from 'query/react:hooks/useQuery'
-import { createQuery } from 'query:index'
-import { PropsWithChildren, Suspense } from 'react'
+import { createQuery, Query } from 'query:index'
+import { act, Suspense, useMemo } from 'react'
+import { createRoot } from 'react-dom/client'
+import { QueryProvider } from 'query/react:components/QueryProvider'
 
-interface User {
-  email: string
-}
+// @ts-expect-error enable act environment
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 describe('useQuery', function () {
-  it.concurrent('can query data', async ({ expect }) => {
-    const user: User = { email: 'testing@example.com' }
-
+  it('can query data', async ({ expect }) => {
     function fetcher() {
-      return Promise.resolve(user)
-    }
-
-    function wrapper({ children }: PropsWithChildren) {
-      return <Suspense fallback="loading">{children} </Suspense>
+      return Promise.resolve('works')
     }
 
     const query = createQuery({ fetcher })
-    const container = document.createElement('div')
+    const options = { query }
 
-    const { result } = renderHook(() => useQuery<User>('/user', { query }), { wrapper, container })
+    function Component() {
+      console.log('A')
 
-    async function action() {
-      await waitFor(
-        () => {
-          expect(result.current).not.toBeUndefined()
-          expect(result.current).not.toBeNull()
-        },
-        { timeout: 5000 }
-      )
+      const { data } = useQuery<string>('/user')
+      console.log('C')
+
+      return data
     }
 
-    await action().finally(() => {
-      console.log('YEAA')
+    console.log('D')
+    const container = document.createElement('div')
+    console.log('E')
+    const promise = query.once('/user', 'refetching').then(() => {
+      console.log('1')
+    })
+    const promise2 = query.once('/user', 'error').then(() => {
+      console.log('2')
+    })
+    const promise3 = query.once('/user', 'resolved').then(() => {
+      console.log('3')
     })
 
-    console.log(result.current)
-    expect(result.current.data).toBe(user.email)
+    console.log('F')
+    await act(async function () {
+      createRoot(container).render(
+        <QueryProvider fetcher={fetcher}>
+          <Suspense fallback="loading">
+            <Component />
+          </Suspense>
+        </QueryProvider>
+      )
+
+      console.log('G')
+
+      // await promise
+    })
+
+    await act(async function () {
+      console.log('H')
+      await promise
+      console.log('H2')
+    })
+
+    console.log('I')
+
+    expect(container.innerText).toBe('works')
   })
 })

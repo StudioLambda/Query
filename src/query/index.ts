@@ -317,13 +317,17 @@ export interface Query {
    */
   readonly snapshot: <T = unknown>(key: string) => T | undefined
 
-  // Returns the first event on the given key that happens.
-  //
-  // It does so by subscribing and unsubscribing after event has
-  // been emitted.
+  /**
+   * Returns the first event on the given key that happens.
+   *
+   * It does so by subscribing and unsubscribing after event has
+   * been emitted.
+   */
   readonly once: (key: string, event: QueryEvent) => Promise<Event>
 
-  // A generator that is able to stream events as they come in.
+  /**
+   * A generator that is able to stream events as they come in.
+   */
   readonly stream: (key: string, event: QueryEvent) => AsyncGenerator<Event>
 
   /**

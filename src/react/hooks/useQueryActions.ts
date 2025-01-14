@@ -16,17 +16,36 @@ export function useQueryActions<T = unknown>(
 ): QueryActions<T> {
   useDebugValue('useQueryActions')
 
+  const {
+    expiration: oExpiration,
+    fetcher: oFetcher,
+    stale: oStale,
+    removeOnError: oRemoveOnError,
+    fresh: oFresh,
+  } = options ?? {}
+
   const { query, mutate, forget } = useQueryInstance(options)
 
   function refetchHandler(refetchOptions?: Options<T>) {
     return query<T>(key, {
-      stale: false,
-      ...options,
+      stale: oStale ?? false,
+      expiration: oExpiration,
+      fetcher: oFetcher,
+      removeOnError: oRemoveOnError,
+      fresh: oFresh,
       ...refetchOptions,
     })
   }
 
-  const refetch = useCallback(refetchHandler, [query, key, options])
+  const refetch = useCallback(refetchHandler, [
+    query,
+    key,
+    oExpiration,
+    oFetcher,
+    oStale,
+    oRemoveOnError,
+    oFresh,
+  ])
 
   function mutateHandler<T = unknown>(value: MutationValue<T>, options?: MutateOptions<T>) {
     return mutate(key, value, options)

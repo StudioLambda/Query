@@ -723,3 +723,17 @@ it.concurrent('can use regex to forget the keys', ({ expect }) => {
   expect(keys('items')).toContain('second')
   expect(keys('items')).toContain('second/first')
 })
+
+it.concurrent('can listen to once events', async ({ expect }) => {
+  const { events, once } = createQuery()
+
+  const promise = once('/foo', 'resolved')
+  const detail = 'works'
+
+  events().dispatchEvent(new CustomEvent(`resolved:/foo`, { detail }))
+
+  const event = await promise
+
+  expect(event).toBeDefined()
+  expect(event).toBeDefined()
+})

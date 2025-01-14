@@ -21,6 +21,19 @@ export function useQuery<T = unknown>(key: string, options?: ResourceOptions<T>)
 
   const { additional } = useQueryContext()
 
+  const { clearOnForget: cClearOnForget, ignoreTransitionContext: cIgnoreTransitionContext } =
+    additional ?? {}
+
+  const {
+    clearOnForget: oClearOnForget,
+    ignoreTransitionContext: oIgnoreTransitionContext,
+    expiration: oExpiration,
+    fetcher: oFetcher,
+    stale: oStale,
+    removeOnError: oRemoveOnError,
+    fresh: oFresh,
+  } = options ?? {}
+
   const { isPending: isContextPending, startTransition: startContextTransition } =
     useQueryTransitionContext()
 
@@ -28,10 +41,13 @@ export function useQuery<T = unknown>(key: string, options?: ResourceOptions<T>)
   const { query, expiration, subscribe } = useQueryInstance(options)
 
   function ignoreTransitionContextHandler() {
-    return options?.ignoreTransitionContext ?? additional?.ignoreTransitionContext ?? false
+    return oIgnoreTransitionContext ?? cIgnoreTransitionContext ?? false
   }
 
-  const ignoreTransitionContext = useMemo(ignoreTransitionContextHandler, [options, additional])
+  const ignoreTransitionContext = useMemo(ignoreTransitionContextHandler, [
+    oIgnoreTransitionContext,
+    cIgnoreTransitionContext,
+  ])
 
   function isPendingHandler() {
     if (ignoreTransitionContext) {
@@ -62,17 +78,32 @@ export function useQuery<T = unknown>(key: string, options?: ResourceOptions<T>)
   ])
 
   function clearOnForgetHandler() {
-    return options?.clearOnForget ?? additional?.clearOnForget ?? false
+    return oClearOnForget ?? cClearOnForget ?? false
   }
 
-  const clearOnForget = useMemo(clearOnForgetHandler, [options, additional])
+  const clearOnForget = useMemo(clearOnForgetHandler, [oClearOnForget, cClearOnForget])
 
   async function promiseHandler() {
-    console.log('trigger query!')
-    return await query<T>(key, options)
+    console.log('QUERY!!')
+    return await query<T>(key, {
+      expiration: oExpiration,
+      fetcher: oFetcher,
+      stale: oStale,
+      removeOnError: oRemoveOnError,
+      fresh: oFresh,
+    })
   }
 
-  const promise = useMemo(promiseHandler, [query, key, options])
+  const promise = useMemo(promiseHandler, [
+    query,
+    key,
+    oExpiration,
+    oFetcher,
+    oStale,
+    oRemoveOnError,
+    oFresh,
+  ])
+
   const initial = useRef<T>(undefined)
 
   if (initial.current === undefined) {
@@ -123,7 +154,13 @@ export function useQuery<T = unknown>(key: string, options?: ResourceOptions<T>)
     function onForgotten() {
       if (clearOnForget) {
         startTransition(async function () {
-          const data = await query<T>(key, options)
+          const data = await query<T>(key, {
+            expiration: oExpiration,
+            fetcher: oFetcher,
+            stale: oStale,
+            removeOnError: oRemoveOnError,
+            fresh: oFresh,
+          })
 
           startTransition(function () {
             setData(data)
@@ -155,7 +192,11 @@ export function useQuery<T = unknown>(key: string, options?: ResourceOptions<T>)
     subscribe,
     key,
     clearOnForget,
-    options,
+    oExpiration,
+    oFetcher,
+    oStale,
+    oRemoveOnError,
+    oFresh,
     startTransition,
   ])
 

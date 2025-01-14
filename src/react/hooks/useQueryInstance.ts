@@ -9,10 +9,11 @@ export interface QueryInstance {
 export function useQueryInstance(options?: QueryInstance): Query {
   useDebugValue('useQueryInstance')
 
-  const contextOptions = useQueryContext()
+  const { query: cQuery } = useQueryContext()
+  const { query: oQuery } = options ?? {}
 
   function query() {
-    const instance = options?.query ?? contextOptions.query
+    const instance = oQuery ?? cQuery
 
     if (!instance) {
       throw new Error(
@@ -23,5 +24,5 @@ export function useQueryInstance(options?: QueryInstance): Query {
     return instance
   }
 
-  return useMemo(query, [options, contextOptions])
+  return useMemo(query, [oQuery, cQuery])
 }

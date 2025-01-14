@@ -1,4 +1,4 @@
-import { useDebugValue, useEffect, useState } from 'react'
+import { useDebugValue, useEffect, useMemo, useState } from 'react'
 import { useQueryInstance } from './useQueryInstance'
 
 export interface Status {
@@ -91,5 +91,9 @@ export function useQueryStatus(key: string): Status {
 
   useEffect(subscribeHandler, [key, subscribe, expiration, setExpiresAt])
 
-  return { expiresAt, isExpired, isRefetching, isMutating }
+  function statusHandler() {
+    return { expiresAt, isExpired, isRefetching, isMutating }
+  }
+
+  return useMemo(statusHandler, [expiresAt, isExpired, isRefetching, isMutating])
 }
