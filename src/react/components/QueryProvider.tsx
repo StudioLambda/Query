@@ -1,35 +1,26 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Context, ContextValue, type ContextOptions } from 'query/react:context'
-import { createQuery, Query, type Configuration } from 'query:index'
+import { useEffect, useMemo, type ReactNode } from 'react'
+import { Context, ContextValue } from 'query/react:context'
+import { createQuery, Query } from 'query:index'
 
-type OtherProps = Configuration & ContextOptions
-
-export interface QueryProviderProps extends OtherProps {
+export interface QueryProviderProps extends ContextValue {
   children?: ReactNode
 }
 
 export function QueryProvider({
   children,
   clearOnForget,
-  broadcast,
-  ...options
+  ignoreTransitionContext,
+  query,
 }: QueryProviderProps) {
-  function initial() {
-    return createQuery({ broadcast, ...options })
+  function queryInstance() {
+    return query ?? createQuery()
   }
 
-  const [query] = useState<Query>(initial)
-
-  function reconfigure() {
-    query.configure(options)
-  }
-
-  useEffect(reconfigure, [query, options])
+  const localQuery = useMemo<Query>(queryInstance, [query])
 
   function broadcastCleanup() {
-    if (broadcast) {
-      query.configure({ broadcast })
-      const unsubscribe = query.subscribeBroadcast()
+    if (localQuery.broadcast()) {
+      const unsubscribe = localQuery.subscribeBroadcast()
 
       return function () {
         unsubscribe()
@@ -38,8 +29,8 @@ export function QueryProvider({
 
     const channel = new BroadcastChannel('query')
 
-    query.configure({ broadcast: channel })
-    const unsubscribe = query.subscribeBroadcast()
+    localQuery.configure({ broadcast: channel })
+    const unsubscribe = localQuery.subscribeBroadcast()
 
     return function () {
       unsubscribe()
@@ -47,19 +38,13 @@ export function QueryProvider({
     }
   }
 
-  useEffect(broadcastCleanup, [query, broadcast])
-
-  function additionalHandler() {
-    return { clearOnForget }
-  }
-
-  const additional = useMemo(additionalHandler, [clearOnForget])
+  useEffect(broadcastCleanup, [localQuery])
 
   function valueHandler(): ContextValue {
-    return { query, additional }
+    return { query, clearOnForget, ignoreTransitionContext }
   }
 
-  const value = useMemo(valueHandler, [query, additional])
+  const value = useMemo(valueHandler, [query, clearOnForget, ignoreTransitionContext])
 
   return <Context value={value}>{children}</Context>
 }

@@ -1,17 +1,13 @@
 import { createContext } from 'react'
-import { Query } from 'query:index'
+import { QueryInstance } from './hooks/useQueryInstance'
 
-export interface ContextOptions {
+export interface ContextValue extends QueryInstance {
   readonly clearOnForget?: boolean
   readonly ignoreTransitionContext?: boolean
 }
 
-export interface ContextValue {
-  readonly query?: Query
-  readonly additional?: ContextOptions
-}
-
 export const Context = createContext<ContextValue>({
   query: undefined,
-  additional: undefined,
+  clearOnForget: undefined,
+  ignoreTransitionContext: undefined,
 })

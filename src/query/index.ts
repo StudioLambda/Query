@@ -30,7 +30,7 @@ interface ItemsCacheItem<T = unknown> {
   /**
    * Stores the cache item.
    */
-  readonly item: T
+  readonly item: Promise<T>
 
   /**
    * Determines the expiration date of the item.
@@ -139,7 +139,7 @@ export type CacheType = 'resolvers' | 'items'
 /**
  * The mutation function type.
  */
-export interface MutationFunction<T> {
+export type MutationFunction<T> = {
   (previous?: T, expiresAt?: Date): T | Promise<T>
 }
 
@@ -147,13 +147,6 @@ export interface MutationFunction<T> {
  * The available mutation values.
  */
 export type MutationValue<T> = T | MutationFunction<T>
-
-/**
- * The function type for the event subscription.
- */
-export interface SubscribeFunction {
-  (key: string, event: QueryEvent, listener: EventListener): Unsubscriber
-}
 
 /**
  * The broadcast payload.
@@ -173,22 +166,22 @@ export interface BroadcastPayload {
 /**
  * The function type for the broadcast subscription.
  */
-export interface SubscribeBroadcastFunction {
+export type SubscribeBroadcastFunction = {
   (): Unsubscriber
 }
 
 /**
  * The query function type.
  */
-export interface QueryFunction {
+export type QueryFunction = {
   <T = unknown>(key: string, options?: Options<T>): Promise<T>
 }
 
-export interface ExpirationFunction<T = unknown> {
+export type ExpirationFunction<T = unknown> = {
   (item: T): number
 }
 
-export interface FetcherFunction<T = unknown> {
+export type FetcherFunction<T = unknown> = {
   (key: string, additional: FetcherAdditional): Promise<T>
 }
 
@@ -209,14 +202,14 @@ export interface MutateOptions<T = unknown> {
 /**
  * The mutate function type.
  */
-export interface MutateFunction {
+export type MutateFunction = {
   <T = unknown>(key: string, item: MutationValue<T>, options?: MutateOptions<T>): Promise<T>
 }
 
 /**
  * The hydrate function type.
  */
-export interface HydrateFunction {
+export type HydrateFunction = {
   <T = unknown>(keys: string | string[], item: T, options?: HydrateOptions<T>): void
 }
 
@@ -242,6 +235,18 @@ export interface Caches {
   readonly resolvers: Cache<ResolversCacheItem>
 }
 
+export type OnceFunction = {
+  <T = unknown>(key: string, event: QueryEvent): Promise<CustomEventInit<T>>
+}
+
+export type StreamFunction = {
+  <T = unknown>(key: string, event: QueryEvent): AsyncGenerator<CustomEventInit<T>>
+}
+
+export type ConfigureFunction = {
+  (options?: Partial<Configuration>): void
+}
+
 /**
  * Represents the methods a query
  * should implement.
@@ -250,13 +255,20 @@ export interface Query {
   /**
    * Configures the current instance of query.
    */
-  readonly configure: (options?: Partial<Configuration>) => void
+  readonly configure: ConfigureFunction
 
   /**
    * Fetches the key information using a fetcher.
    * The returned promise contains the result item.
    */
   readonly query: QueryFunction
+
+  /**
+   * Emit is able to send events to active subscribers
+   * with the given payload. It is a low level API
+   * and should be used with case.
+   */
+  readonly emit: EmitFunction
 
   /**
    * Subscribes to a given event & key. The event handler
@@ -292,7 +304,7 @@ export interface Query {
    * Forgets the given keys from the cache.
    * Removes items from both, the cache and resolvers.
    */
-  readonly forget: (keys?: string | string[] | RegExp) => void
+  readonly forget: (keys?: string | string[] | RegExp) => Promise<void>
 
   /**
    * Hydrates the given keys on the cache
@@ -323,12 +335,12 @@ export interface Query {
    * It does so by subscribing and unsubscribing after event has
    * been emitted.
    */
-  readonly once: (key: string, event: QueryEvent) => Promise<Event>
+  readonly once: OnceFunction
 
   /**
    * A generator that is able to stream events as they come in.
    */
-  readonly stream: (key: string, event: QueryEvent) => AsyncGenerator<Event>
+  readonly stream: StreamFunction
 
   /**
    * Returns the current cache instances in use.
@@ -358,6 +370,37 @@ export type QueryEvent =
   | 'forgotten'
   | 'hydrated'
   | 'error'
+
+export type SubscribeListener<T> = (event: CustomEventInit<T>) => void
+
+/**
+ * The function type for the event subscription.
+ */
+export interface SubscribeFunction {
+  <T = unknown>(
+    key: string,
+    event: 'refetching' | 'resolved' | 'mutating' | 'mutated' | 'forgotten' | 'hydrated',
+    listener: SubscribeListener<Promise<T>>
+  ): Unsubscriber
+  (key: string, event: 'error' | 'aborted', listener: SubscribeListener<unknown>): Unsubscriber
+  <T = unknown>(key: string, event: QueryEvent, listener: SubscribeListener<T>): Unsubscriber
+}
+
+/**
+ * The emit function to manually emit events.
+ */
+export interface EmitFunction {
+  <T = unknown>(
+    key: string,
+    event: 'refetching' | 'resolved' | 'mutating' | 'mutated' | 'forgotten' | 'hydrated',
+    detail: Promise<T>
+  ): void
+  (key: string, event: 'error' | 'aborted', detail: unknown): void
+  <T = unknown>(key: string, event: QueryEvent, detail: T): void
+}
+
+// TriggerFunction is used to trigger a deferred promise.
+type TriggerFunction = undefined | (() => Promise<void>)
 
 /**
  * Stores the default fetcher function.
@@ -460,6 +503,18 @@ export function createQuery(instanceOptions?: Configuration): Query {
     instanceFresh = options?.fresh ?? instanceFresh
   }
 
+  function emit<T = unknown>(key: string, event: QueryEvent, detail: T) {
+    events.dispatchEvent(new CustomEvent(`${event}:${key}`, { detail }))
+
+    switch (event) {
+      case 'mutated':
+      case 'resolved':
+      case 'hydrated':
+      case 'forgotten':
+        broadcast?.postMessage({ event: `${event}:${key}`, detail })
+    }
+  }
+
   /**
    * Subscribes to a given keyed event. The event handler
    * does have a payload parameter that will contain relevant
@@ -467,14 +522,19 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * If there's a pending resolver for that key, the `refetching`
    * event is fired immediatly.
    */
-  function subscribe(key: string, event: QueryEvent, listener: EventListener): Unsubscriber {
+
+  function subscribe<T = unknown>(
+    key: string,
+    event: QueryEvent,
+    listener: SubscribeListener<T>
+  ): Unsubscriber {
     events.addEventListener(`${event}:${key}`, listener)
     const value = resolversCache.get(key)
 
     // For the refetching event, we want to immediatly return if there's
     // a pending resolver.
     if (event === 'refetching' && value !== undefined) {
-      listener(new CustomEvent(`${event}:${key}`, { detail: value.item }))
+      emit(key, event, value.item)
     }
 
     return function () {
@@ -500,28 +560,24 @@ export function createQuery(instanceOptions?: Configuration): Query {
         const fn = resolver as MutationFunction<T>
         const value = itemsCache.get(key)
 
-        resolver = await fn(value?.item as T, value?.expiresAt)
+        resolver = await fn((await value?.item) as T, value?.expiresAt)
       }
 
-      const expiresAt = new Date()
-
-      expiresAt.setMilliseconds(
-        expiresAt.getMilliseconds() + (options?.expiration?.(resolver) ?? 0)
-      )
-
-      itemsCache.set(key, { item: resolver, expiresAt: expiresAt })
-
-      return resolver
+      return await resolver
     }
 
     const result = action(resolver)
 
-    events.dispatchEvent(new CustomEvent(`mutating:${key}`, { detail: result }))
+    emit(key, 'mutating', result)
 
     const item = await result
+    const expiresAt = new Date()
 
-    events.dispatchEvent(new CustomEvent(`mutated:${key}`, { detail: item }))
-    broadcast?.postMessage({ event: `mutated:${key}`, detail: item })
+    expiresAt.setMilliseconds(expiresAt.getMilliseconds() + (options?.expiration?.(item) ?? 0))
+
+    itemsCache.set(key, { item: result, expiresAt: expiresAt })
+
+    emit(key, 'mutated', item)
 
     return item
   }
@@ -559,8 +615,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
         resolver.controller.abort(reason)
         resolversCache.delete(key)
 
-        events.dispatchEvent(new CustomEvent(`aborted:${key}`, { detail: reason }))
-        broadcast?.postMessage({ event: `aborted:${key}`, detail: reason })
+        emit(key, 'aborted', reason)
       }
     }
   }
@@ -570,7 +625,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * Does not remove any resolvers.
    * If no keys are provided the items cache is cleared.
    */
-  function forget(cacheKeys?: string | string[] | RegExp): void {
+  async function forget(cacheKeys?: string | string[] | RegExp): Promise<void> {
     let itemKeys: string[]
 
     if (typeof cacheKeys === 'string') {
@@ -588,8 +643,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
 
       if (item !== undefined) {
         itemsCache.delete(key)
-        events.dispatchEvent(new CustomEvent(`forgotten:${key}`, { detail: item.item }))
-        broadcast?.postMessage({ event: `forgotten:${key}`, detail: item.item })
+        emit(key, 'forgotten', await item.item)
       }
     }
   }
@@ -607,12 +661,13 @@ export function createQuery(instanceOptions?: Configuration): Query {
     options?: HydrateOptions<T>
   ): void {
     const expiresAt = new Date()
+    const result = Promise.resolve(item)
+
     expiresAt.setMilliseconds(expiresAt.getMilliseconds() + (options?.expiration?.(item) ?? 0))
 
     for (const key of typeof keys === 'string' ? [keys] : keys) {
-      itemsCache.set(key, { item, expiresAt: expiresAt })
-      events.dispatchEvent(new CustomEvent(`hydrated:${key}`, { detail: item }))
-      broadcast?.postMessage({ event: `hydrated:${key}`, detail: item })
+      itemsCache.set(key, { item: result, expiresAt: expiresAt })
+      emit(key, 'hydrated', item)
     }
   }
 
@@ -628,7 +683,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * Fetches the key information using a fetcher.
    * The returned promise contains the result item.
    */
-  async function query<T = unknown>(key: string, options?: Options<T>): Promise<T> {
+  function query<T = unknown>(key: string, options?: Options<T>): Promise<T> {
     /**
      * Stores the expiration time of an item.
      */
@@ -662,110 +717,120 @@ export function createQuery(instanceOptions?: Configuration): Query {
     const fresh = options?.fresh ?? instanceOptions?.fresh
 
     // Force fetching of the data.
-    async function refetch(key: string): Promise<T> {
-      try {
-        // Check if there's a pending resolver for that data.
-        const pending = resolversCache.get(key)
+    function refetch(key: string): Promise<T> {
+      // Check if there's a pending resolver for that data.
+      const pending = resolversCache.get(key)
 
-        if (pending !== undefined) {
-          return await (pending.item as Promise<T>)
-        }
-
-        // Create the abort controller that will be
-        // called when a query is aborted.
-        const controller = new AbortController()
-
-        // Initiate the fetching request.
-        async function action() {
-          const result = fetcher(key, { signal: controller.signal })
-
-          // Awaits the fetching to get the result item.
-          const item = await result
-
-          // Removes the resolver from the cache.
-          resolversCache.delete(key)
-
-          // Create the expiration time for the item.
-          const expiresAt = new Date()
-          expiresAt.setMilliseconds(expiresAt.getMilliseconds() + expiration(item))
-
-          // Set the item to the cache.
-          itemsCache.set(key, { item, expiresAt })
-
-          return item
-        }
-
-        const result = action()
-
-        // Adds the resolver to the cache.
-        resolversCache.set(key, { item: result, controller })
-        events.dispatchEvent(new CustomEvent(`refetching:${key}`, { detail: result }))
-
-        const item = await result
-
-        // Notify of the resolved item.
-        events.dispatchEvent(new CustomEvent(`resolved:${key}`, { detail: item }))
-        broadcast?.postMessage({ event: `resolved:${key}`, detail: item })
-
-        // Return back the item.
-        return item
-      } catch (error) {
-        // Remove the resolver.
-        resolversCache.delete(key)
-
-        // Check if the item should be removed as well.
-        if (removeOnError) {
-          itemsCache.delete(key)
-        }
-
-        // Notify of the error.
-        events.dispatchEvent(new CustomEvent(`error:${key}`, { detail: error }))
-        broadcast?.postMessage({ event: `error:${key}`, detail: error })
-
-        // Throw back the error.
-        throw error
+      if (pending !== undefined) {
+        return pending.item as Promise<T>
       }
+
+      // Create the abort controller that will be
+      // called when a query is aborted.
+      const controller = new AbortController()
+
+      let trigger: TriggerFunction = undefined
+
+      // Initiate the fetching request.
+      const result = new Promise<T>(function (resolve, reject) {
+        trigger = async function () {
+          try {
+            const result = fetcher(key, { signal: controller.signal })
+
+            // Awaits the fetching to get the result item.
+            const item = await result
+
+            const promise =
+              (resolversCache.get(key)?.item as Promise<T> | undefined) ?? Promise.resolve(item)
+
+            // Removes the resolver from the cache.
+            resolversCache.delete(key)
+
+            // Create the expiration time for the item.
+            const expiresAt = new Date()
+            expiresAt.setMilliseconds(expiresAt.getMilliseconds() + expiration(item))
+
+            // Set the item to the cache.
+            itemsCache.set(key, { item: promise, expiresAt })
+
+            // Notify of the resolved item.
+            emit(key, 'resolved', item)
+
+            resolve(item)
+          } catch (error) {
+            // Remove the resolver.
+            resolversCache.delete(key)
+
+            // Check if the item should be removed as well.
+            if (removeOnError) {
+              itemsCache.delete(key)
+            }
+
+            // Notify of the error.
+            emit(key, 'error', error)
+
+            // Throw back the error.
+            reject(error as Error)
+          }
+        }
+      })
+
+      // Adds the resolver to the cache.
+      resolversCache.set(key, { item: result, controller })
+      emit(key, 'refetching', result)
+
+      trigger = trigger as TriggerFunction
+
+      while (trigger === undefined) {
+        // This ensures that the trigger
+        // has been defined, as it is defined
+        // inside the promise.
+      }
+
+      void trigger()
+
+      return result
     }
 
     // We want to force a fresh item ignoring any current cached
     // value or its expiration time.
     if (fresh) {
-      return await refetch(key)
+      return refetch(key)
     }
 
     // Check if there's an item in the cache for the given key.
     const cached = itemsCache.get(key)
 
-    if (cached !== undefined) {
-      // We must check if that item has actually expired.
-      // to trigger a revalidation if needed.
-      const hasExpired = cached.expiresAt <= new Date()
-
-      // The item has expired and the fetch is able
-      // to return a stale item while revalidating
-      // in the background.
-      if (hasExpired && stale) {
-        // We have to silence the error to avoid unhandled promises.
-        // Refer to the error event if you need full controll of errors.
-        refetch(key).catch(() => {})
-
-        return cached.item as T
-      }
-
-      // The item has expired but we dont allow stale
-      // responses so we need to wait for the revalidation.
-      if (hasExpired) {
-        return await refetch(key)
-      }
-
-      // The item has not yet expired, so we can return it and
-      // assume it's valid since it's not yet considered stale.
-      return cached.item as T
+    if (cached === undefined) {
+      // The item is not found in the items cache.
+      // We need to perform a revalidation of the item.
+      return refetch(key)
     }
 
-    // The item is not found in the items cache.
-    // We need to perform a revalidation of the item.
-    return await refetch(key)
+    // We must check if that item has actually expired.
+    // to trigger a revalidation if needed.
+    const hasExpired = cached.expiresAt <= new Date()
+
+    // The item has expired and the fetch is able
+    // to return a stale item while revalidating
+    // in the background.
+    if (hasExpired && stale) {
+      // We have to silence the error to avoid unhandled promises.
+      // Refer to the error event if you need full controll of errors.
+      refetch(key).catch(() => {})
+
+      return cached.item as Promise<T>
+    }
+
+    // The item has expired but we dont allow stale
+    // responses so we need to wait for the revalidation.
+    if (hasExpired) {
+      return refetch(key)
+    }
+
+    // The item has not yet expired, so we can return it and
+    // assume it's valid since it's not yet considered stale.
+    return cached.item as Promise<T>
   }
 
   /**
@@ -807,23 +872,24 @@ export function createQuery(instanceOptions?: Configuration): Query {
     }
   }
 
-  async function once(key: string, event: QueryEvent): Promise<Event> {
-    return new Promise<Event>(function (resolve) {
-      const unsubscribe = subscribe(key, event, function (event) {
+  function once<T = unknown>(key: string, event: QueryEvent) {
+    return new Promise<CustomEventInit<T>>(function (resolve) {
+      const unsubscribe = subscribe<T>(key, event, function (event) {
         resolve(event)
         unsubscribe()
       })
     })
   }
 
-  async function* stream(key: string, event: QueryEvent) {
+  async function* stream<T = unknown>(key: string, event: QueryEvent) {
     for (;;) {
-      yield await once(key, event)
+      yield await once<T>(key, event)
     }
   }
 
   return {
     query,
+    emit,
     subscribe,
     subscribeBroadcast,
     mutate,

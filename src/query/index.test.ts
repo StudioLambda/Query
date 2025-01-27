@@ -179,10 +179,11 @@ it.concurrent('can subscribe to mutations on resources', async ({ expect }) => {
     }
   )
 
-  await mutate('example-key', 'mutated-example')
+  const res = await mutate('example-key', 'mutated-example')
   unsubscribe()
 
   expect(result).toBe('mutated-example')
+  expect(result).toBe(res)
 })
 
 it.concurrent('can mutate non-existing cache keys when using a fn', async ({ expect }) => {
@@ -223,9 +224,11 @@ it.concurrent('can subscribe to mutations on resources 2', async ({ expect }) =>
     }
   )
 
-  await mutate<number>('example-key', (old) => (old ?? 0) + 1)
+  const second = await mutate<number>('example-key', (old) => (old ?? 0) + 1)
   unsubscribe()
 
+  expect(second).toBe(2)
+  expect(result).toBeDefined()
   expect(result).toBe(2)
 })
 
@@ -315,9 +318,10 @@ it.concurrent('can subscribe to forgets on resources', async ({ expect }) => {
     }
   )
 
-  forget('example-key')
+  await forget('example-key')
   unsubscribe()
 
+  expect(result).toBeDefined()
   expect(result).toBe('example')
   expect(keys('items')).toHaveLength(0)
 })
@@ -493,7 +497,7 @@ it.concurrent('can forget a query key', async ({ expect }) => {
   await query<string>('example-key')
 
   expect(keys('items')).toContain('example-key')
-  forget('example-key')
+  await forget('example-key')
   expect(keys('items')).toHaveLength(0)
 })
 
@@ -506,7 +510,7 @@ it.concurrent('can forget a query key 2', async ({ expect }) => {
   await query<string>('example-key')
 
   expect(keys('items')).toContain('example-key')
-  forget(['example-key'])
+  await forget(['example-key'])
   expect(keys('items')).toHaveLength(0)
 })
 
@@ -519,7 +523,7 @@ it.concurrent('can forget a query key 3', async ({ expect }) => {
   await query<string>('example-key')
 
   expect(keys('items')).toContain('example-key')
-  forget()
+  await forget()
   expect(keys('items')).toHaveLength(0)
 })
 
@@ -711,11 +715,11 @@ it.concurrent('can use the default fetcher when fails', async ({ expect }) => {
   await expect(query<{ data: string }>('example')).rejects.toThrowError()
 })
 
-it.concurrent('can use regex to forget the keys', ({ expect }) => {
+it.concurrent('can use regex to forget the keys', async ({ expect }) => {
   const { hydrate, forget, keys } = createQuery()
 
   hydrate(['first', 'first/second', 'second/first', 'second'], 0)
-  forget(/^first(.*)/g)
+  await forget(/^first(.*)/g)
 
   expect(keys('items')).toHaveLength(2)
   expect(keys('items')).not.toContain('first')
@@ -736,4 +740,24 @@ it.concurrent('can listen to once events', async ({ expect }) => {
 
   expect(event).toBeDefined()
   expect(event).toBeDefined()
+})
+
+it.concurrent('uses the same promises for the same result', async ({ expect }) => {
+  async function fetcher() {
+    await new Promise((r) => setTimeout(r, 100))
+    return 'works'
+  }
+
+  const { query } = createQuery({ fetcher })
+
+  const promise = query<string>('/')
+  const promise2 = query<string>('/')
+
+  expect(promise === promise2).toBeTruthy()
+
+  await new Promise((r) => setTimeout(r, 150))
+
+  const promise3 = query<string>('/')
+
+  expect(promise === promise3).toBeTruthy()
 })

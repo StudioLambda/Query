@@ -1,36 +1,45 @@
 import { it } from 'vitest'
 import { QueryProvider } from 'query/react:components/QueryProvider'
-import { render, waitFor } from '@testing-library/react'
 import { useQuery } from 'query/react:hooks/useQuery'
-import { PropsWithChildren, Suspense } from 'react'
-
-interface User {
-  email: string
-}
-
-function Component() {
-  const { data } = useQuery<User>('/user')
-
-  return <p>{data.email}</p>
-}
+import { act, Suspense } from 'react'
+import { createRoot } from 'react-dom/client'
+import { createQuery } from 'query:index'
 
 it.concurrent('can replace fetcher', async ({ expect }) => {
+  interface User {
+    email: string
+  }
+
+  function Component() {
+    const { data } = useQuery<User>('/user')
+
+    return <p>{data.email}</p>
+  }
+
   const user: User = { email: 'testing@example.com' }
 
   function fetcher() {
     return Promise.resolve(user)
   }
 
-  function wrapper({ children }: PropsWithChildren) {
-    return (
-      <QueryProvider fetcher={fetcher}>
-        <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
+  const container = document.createElement('div')
+  const query = createQuery({ fetcher })
+  const promise = query.once('/user', 'refetching')
+
+  // eslint-disable-next-line
+  await act(async function () {
+    createRoot(container).render(
+      <QueryProvider query={query}>
+        <Suspense fallback={<div>Loading...</div>}>
+          <Component />
+        </Suspense>
       </QueryProvider>
     )
-  }
+  })
 
-  const result = render(<Component />, { wrapper })
-  const element = await waitFor(async () => await result.findByRole('paragraph'))
+  await act(async function () {
+    await promise
+  })
 
-  expect(element.innerText).toBe(user.email)
+  expect(container.innerText).toBe(user.email)
 })

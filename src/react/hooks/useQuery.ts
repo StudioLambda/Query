@@ -1,5 +1,5 @@
 import { useEffect, use, useState, useMemo, useDebugValue, useTransition, useRef } from 'react'
-import { ContextOptions as ContextOptions } from 'query/react:context'
+import { ContextValue } from 'query/react:context'
 import { Options } from 'query:index'
 import { useQueryContext } from './useQueryContext'
 import { QueryInstance, useQueryInstance } from './useQueryInstance'
@@ -14,15 +14,13 @@ export interface Resource<T = unknown> extends AdditionalHooks<T> {
   isPending: boolean
 }
 
-export type ResourceOptions<T = unknown> = ContextOptions & Options<T> & QueryInstance
+export type ResourceOptions<T = unknown> = ContextValue & Options<T> & QueryInstance
 
 export function useQuery<T = unknown>(key: string, options?: ResourceOptions<T>): Resource<T> {
   useDebugValue('useQuery')
 
-  const { additional } = useQueryContext()
-
   const { clearOnForget: cClearOnForget, ignoreTransitionContext: cIgnoreTransitionContext } =
-    additional ?? {}
+    useQueryContext()
 
   const {
     clearOnForget: oClearOnForget,
@@ -83,9 +81,8 @@ export function useQuery<T = unknown>(key: string, options?: ResourceOptions<T>)
 
   const clearOnForget = useMemo(clearOnForgetHandler, [oClearOnForget, cClearOnForget])
 
-  async function promiseHandler() {
-    console.log('QUERY!!')
-    return await query<T>(key, {
+  function promiseHandler() {
+    return query<T>(key, {
       expiration: oExpiration,
       fetcher: oFetcher,
       stale: oStale,
@@ -113,15 +110,15 @@ export function useQuery<T = unknown>(key: string, options?: ResourceOptions<T>)
   const [data, setData] = useState(initial.current)
 
   function subscribeHandler() {
-    function onResolved(event: Event) {
+    function onResolved(event: CustomEventInit<T>) {
       startTransition(function () {
-        setData((event as CustomEvent<T>).detail)
+        setData(event.detail as T)
       })
     }
 
-    function onMutating(event: Event) {
+    function onMutating(event: CustomEventInit<Promise<T>>) {
       startTransition(async function () {
-        const value = await (event as CustomEvent<Promise<T>>).detail
+        const value = await (event.detail as Promise<T>)
 
         startTransition(function () {
           setData(value)
@@ -129,21 +126,21 @@ export function useQuery<T = unknown>(key: string, options?: ResourceOptions<T>)
       })
     }
 
-    function onMutated(event: Event) {
+    function onMutated(event: CustomEventInit<T>) {
       startTransition(function () {
-        setData((event as CustomEvent<T>).detail)
+        setData(event.detail as T)
       })
     }
 
-    function onHydrated(event: Event) {
+    function onHydrated(event: CustomEventInit<T>) {
       startTransition(function () {
-        setData((event as CustomEvent<T>).detail)
+        setData(event.detail as T)
       })
     }
 
-    function onRefetching(event: Event) {
+    function onRefetching(event: CustomEventInit<Promise<T>>) {
       startTransition(async function () {
-        const value = await (event as CustomEvent<Promise<T>>).detail
+        const value = await (event.detail as Promise<T>)
 
         startTransition(function () {
           setData(value)
@@ -201,7 +198,7 @@ export function useQuery<T = unknown>(key: string, options?: ResourceOptions<T>)
   ])
 
   const actions = useQueryActions<T>(key, options)
-  const status = useQueryStatus(key)
+  const status = useQueryStatus(key, options)
 
   function resourceHandler(): Resource<T> {
     return { data, isPending, ...actions, ...status }

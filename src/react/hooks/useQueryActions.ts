@@ -53,8 +53,8 @@ export function useQueryActions<T = unknown>(
 
   const localMutate = useCallback(mutateHandler, [mutate, key])
 
-  function forgetHandler() {
-    forget(key)
+  async function forgetHandler() {
+    await forget(key)
   }
 
   const localForget = useCallback(forgetHandler, [forget, key])
