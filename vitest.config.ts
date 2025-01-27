@@ -5,6 +5,7 @@ export default mergeConfig(
   viteConfig,
   defineConfig({
     test: {
+      setupFiles: './setupTests.ts',
       update: false,
       reporters: 'verbose',
       environment: 'happy-dom',

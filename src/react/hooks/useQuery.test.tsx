@@ -4,9 +4,6 @@ import { createQuery } from 'query:index'
 import { act, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 
-// @ts-expect-error enable act environment
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
-
 describe('useQuery', function () {
   it('can query data', async ({ expect }) => {
     function fetcher() {
