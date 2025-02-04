@@ -1,4 +1,5 @@
 export * from 'query/react:hooks/useQuery'
+export * from 'query/react:hooks/useQueryBasic'
 export * from 'query/react:hooks/useQueryStatus'
 export * from 'query/react:hooks/useQueryInstance'
 export * from 'query/react:hooks/useQueryContext'

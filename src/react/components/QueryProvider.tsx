@@ -1,6 +1,6 @@
 import { useEffect, useMemo, type ReactNode } from 'react'
-import { Context, ContextValue } from 'query/react:context'
-import { createQuery, Query } from 'query:index'
+import { Context, type ContextValue } from 'query/react:context'
+import { createQuery, type Query } from 'query:index'
 
 export interface QueryProviderProps extends ContextValue {
   children?: ReactNode

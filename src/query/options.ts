@@ -1,4 +1,10 @@
-import type { Cache, Caches, CacheType, ItemsCacheItem, ResolversCacheItem } from 'query:cache'
+import {
+  type Cache,
+  type Caches,
+  type CacheType,
+  type ItemsCacheItem,
+  type ResolversCacheItem,
+} from 'query:cache'
 
 /**
  * Represents the available configuration options

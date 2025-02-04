@@ -1,4 +1,4 @@
-import { TransitionContext, QueryTransitionContextValue } from 'query/react:transition'
+import { TransitionContext, type QueryTransitionContextValue } from 'query/react:transition'
 import { useMemo, type ReactNode, type TransitionStartFunction } from 'react'
 
 export interface QueryTransitionProps {

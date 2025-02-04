@@ -1,6 +1,6 @@
-import { MutateOptions, MutationValue, Options } from 'query:index'
+import { type MutateOptions, type MutationValue, type Options } from 'query:index'
 import { useCallback, useDebugValue, useMemo } from 'react'
-import { QueryInstance, useQueryInstance } from './useQueryInstance'
+import { useQueryInstance, type QueryInstance } from './useQueryInstance'
 
 export interface QueryActions<T = unknown> {
   readonly refetch: (refetchOptions?: Options<T>) => Promise<T>

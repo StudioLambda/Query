@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import { QueryInstance } from './hooks/useQueryInstance'
+import { type QueryInstance } from './hooks/useQueryInstance'
 
 export interface ContextValue extends QueryInstance {
   readonly clearOnForget?: boolean

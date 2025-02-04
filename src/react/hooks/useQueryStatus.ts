@@ -1,5 +1,5 @@
 import { useDebugValue, useEffect, useMemo, useState } from 'react'
-import { QueryInstance, useQueryInstance } from './useQueryInstance'
+import { useQueryInstance, type QueryInstance } from './useQueryInstance'
 
 export interface Status {
   readonly expiresAt: Date
