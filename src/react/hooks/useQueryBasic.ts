@@ -1,4 +1,4 @@
-import { useEffect, use, useState, useMemo, useDebugValue, useTransition, useRef } from 'react'
+import { useEffect, use, useState, useMemo, useDebugValue, useTransition } from 'react'
 import { type ContextValue } from 'query/react:context'
 import { type Options } from 'query:index'
 import { useQueryContext } from './useQueryContext'
@@ -100,13 +100,7 @@ export function useQueryBasic<T = unknown>(
     oFresh,
   ])
 
-  const initial = useRef<T>(undefined)
-
-  if (initial.current === undefined) {
-    initial.current = use(promise)
-  }
-
-  const [data, setData] = useState(initial.current)
+  const [data, setData] = useState(() => use(promise))
 
   function subscribeHandler() {
     function onResolved(event: CustomEventInit<T>) {
