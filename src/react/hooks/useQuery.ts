@@ -18,7 +18,7 @@ export type ResourceOptions<T = unknown> = ContextValue & Options<T> & QueryInst
 export function useQuery<T = unknown>(key: string, options?: ResourceOptions<T>): Resource<T> {
   useDebugValue('useQuery')
 
-  const basic = useQueryBasic(key, options)
+  const basic = useQueryBasic<T>(key, options)
   const actions = useQueryActions<T>(key, options)
   const status = useQueryStatus(key, options)
 

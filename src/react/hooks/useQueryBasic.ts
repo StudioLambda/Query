@@ -100,7 +100,7 @@ export function useQueryBasic<T = unknown>(
     oFresh,
   ])
 
-  const [data, setData] = useState(() => use(promise))
+  const [data, setData] = useState<T>(use(promise))
 
   function subscribeHandler() {
     function onResolved(event: CustomEventInit<T>) {
