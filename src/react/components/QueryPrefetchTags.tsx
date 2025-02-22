@@ -5,12 +5,12 @@ import { ReactNode, useMemo, LinkHTMLAttributes } from 'react'
 
 type Additional = LinkHTMLAttributes<HTMLLinkElement> & QueryInstance
 
-export interface QueryPrefetchProps extends Additional {
+export interface QueryPrefetchTagsProps extends Additional {
   keys: string[]
   children?: ReactNode
 }
 
-export function QueryPrefetchTags({ keys, children, ...options }: QueryPrefetchProps) {
+export function QueryPrefetchTags({ keys, children, ...options }: QueryPrefetchTagsProps) {
   useQueryPrefetch(keys, options)
 
   const stableKeys = useStableKeys(keys)
