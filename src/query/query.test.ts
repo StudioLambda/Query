@@ -2,15 +2,21 @@ import { it, vi } from 'vitest'
 import { createQuery, defaultFetcher, FetcherAdditional } from 'query:index'
 
 it.concurrent('can query resources', async ({ expect }) => {
-  function fetcher() {
-    return Promise.resolve('example')
+  async function fetcher(key: string) {
+    await new Promise((r) => setTimeout(r, 200))
+
+    return key
   }
 
   const { query } = createQuery({ fetcher })
 
-  const resource = await query<string>('example-key')
+  const promise = query<string>('example-key')
+  const promise2 = query<string>('example-key2')
 
-  expect(resource).toBe('example')
+  const [resource, resource2] = await Promise.all([promise, promise2])
+
+  expect(resource).toBe('example-key')
+  expect(resource2).toBe('example-key2')
 })
 
 it.concurrent('can fetch expired resources while returning stale', async ({ expect }) => {
@@ -760,4 +766,21 @@ it.concurrent('uses the same promises for the same result', async ({ expect }) =
   const promise3 = query<string>('/')
 
   expect(promise === promise3).toBeTruthy()
+})
+
+it.concurrent('can use multiple queries', async function ({ expect }) {
+  function fetcher(key: string) {
+    return Promise.resolve(key)
+  }
+
+  const { query, next } = createQuery({ fetcher })
+
+  const promise = next<[string, string]>(['/foo', '/bar'])
+
+  await Promise.all([query('/foo'), query('/bar')])
+
+  const [first, second] = await promise
+
+  expect(first).toBe('/foo')
+  expect(second).toBe('/bar')
 })

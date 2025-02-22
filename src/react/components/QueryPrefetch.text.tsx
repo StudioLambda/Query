@@ -5,7 +5,7 @@ import { act, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createQuery } from 'query:index'
 
-it('can replace fetcher', async ({ expect }) => {
+it('can prefetch keys', async ({ expect }) => {
   interface User {
     email: string
   }

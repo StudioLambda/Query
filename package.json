@@ -1,6 +1,6 @@
 {
   "name": "@studiolambda/query",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "license": "MIT",
   "keywords": [
     "stale-while-revalidate",
@@ -19,6 +19,11 @@
     "name": "Erik C. Forés",
     "email": "soc@erik.cat",
     "url": "https://erik.cat"
+  },
+  "homepage": "https://erik.cat/blog/query-docs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/StudioLambda/Query.git"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -68,6 +73,7 @@
       "optional": true
     }
   },
+  "sideEffects": false,
   "devDependencies": {
     "@types/node": "^22.13.4",
     "@types/react": "19.0.8",

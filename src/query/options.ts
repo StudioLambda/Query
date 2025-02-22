@@ -54,7 +54,7 @@ export interface Options<T = unknown> {
    * This determines how many milliseconds an item
    * is considered valid.
    */
-  readonly expiration?: ExpirationFunction<T>
+  readonly expiration?: ExpirationOptionFunction<T>
 
   /**
    * Determines the fetcher function to use.
@@ -125,7 +125,7 @@ export type QueryFunction = {
   <T = unknown>(key: string, options?: Options<T>): Promise<T>
 }
 
-export type ExpirationFunction<T = unknown> = {
+export type ExpirationOptionFunction<T = unknown> = {
   (item: T): number
 }
 
@@ -137,14 +137,14 @@ export type FetcherFunction<T = unknown> = {
  * The mutate function options.
  */
 export interface HydrateOptions<T = unknown> {
-  expiration?: ExpirationFunction<T>
+  expiration?: ExpirationOptionFunction<T>
 }
 
 /**
  * The mutate function options.
  */
 export interface MutateOptions<T = unknown> {
-  expiration?: ExpirationFunction<T>
+  expiration?: ExpirationOptionFunction<T>
 }
 
 /**
@@ -170,12 +170,40 @@ export type OnceFunction = {
   <T = unknown>(key: string, event: QueryEvent): Promise<CustomEventInit<T>>
 }
 
-export type StreamFunction = {
+export type SequenceFunction = {
   <T = unknown>(key: string, event: QueryEvent): AsyncGenerator<CustomEventInit<T>>
+}
+
+export type NextFunction = {
+  <T = unknown>(keys: string | { [K in keyof T]: string }): Promise<T>
+}
+
+export type StreamFunction = {
+  <T = unknown>(keys: string | { [K in keyof T]: string }): AsyncGenerator<T>
 }
 
 export type ConfigureFunction = {
   (options?: Partial<Configuration>): void
+}
+
+export type AbortFunction = {
+  (key?: string | string[], reason?: unknown): void
+}
+
+export type SnapshotFunction = {
+  <T = unknown>(key: string): T | undefined
+}
+
+export type KeysFunction = {
+  (cache?: CacheType): string[]
+}
+
+export type ExpirationFunction = {
+  (key: string): Date | undefined
+}
+
+export type ForgetFunction = {
+  (keys?: string | string[] | RegExp): Promise<void>
 }
 
 /**
@@ -229,13 +257,13 @@ export interface Query {
    * The fetcher is responsible for using the
    * `AbortSignal` to cancel the job.
    */
-  readonly abort: (key?: string | string[], reason?: unknown) => void
+  readonly abort: AbortFunction
 
   /**
    * Forgets the given keys from the cache.
    * Removes items from both, the cache and resolvers.
    */
-  readonly forget: (keys?: string | string[] | RegExp) => Promise<void>
+  readonly forget: ForgetFunction
 
   /**
    * Hydrates the given keys on the cache
@@ -246,19 +274,19 @@ export interface Query {
   /**
    * Returns the given keys for the given cache.
    */
-  readonly keys: (cache?: CacheType) => string[]
+  readonly keys: KeysFunction
 
   /**
    * Returns the expiration date of a given key item.
    * If the item is not in the cache, it will return `undefined`.
    */
-  readonly expiration: (key: string) => Date | undefined
+  readonly expiration: ExpirationFunction
 
   /**
    * Returns the current snapshot of the given key.
    * If the item is not in the items cache, it will return `undefined`.
    */
-  readonly snapshot: <T = unknown>(key: string) => T | undefined
+  readonly snapshot: SnapshotFunction
 
   /**
    * Returns the first event on the given key that happens.
@@ -270,6 +298,17 @@ export interface Query {
 
   /**
    * A generator that is able to stream events as they come in.
+   */
+  readonly sequence: SequenceFunction
+
+  /**
+   * Returns the next queries performed by lambda query.
+   */
+  readonly next: NextFunction
+
+  /**
+   * Returns an async generator that returns the next queries
+   * as they come in.
    */
   readonly stream: StreamFunction
 

@@ -491,6 +491,21 @@ export function createQuery(instanceOptions?: Configuration): Query {
     }
   }
 
+  async function next<T = unknown>(keys: string | { [K in keyof T]: string }): Promise<T> {
+    const iterator = (Array.isArray(keys) ? keys : [keys]) as string[]
+    const promises = iterator.map((key) => once(key, 'refetching'))
+    const events = await Promise.all(promises)
+    const details = events.map((event) => event.detail as Promise<T>)
+
+    return (await (Array.isArray(keys) ? Promise.all(details) : details[0])) as T
+  }
+
+  async function* stream<T = unknown>(keys: string | { [K in keyof T]: string }) {
+    for (;;) {
+      yield await next<T>(keys)
+    }
+  }
+
   function once<T = unknown>(key: string, event: QueryEvent) {
     return new Promise<CustomEventInit<T>>(function (resolve) {
       const unsubscribe = subscribe<T>(key, event, function (event) {
@@ -500,7 +515,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
     })
   }
 
-  async function* stream<T = unknown>(key: string, event: QueryEvent) {
+  async function* sequence<T = unknown>(key: string, event: QueryEvent) {
     for (;;) {
       yield await once<T>(key, event)
     }
@@ -520,6 +535,8 @@ export function createQuery(instanceOptions?: Configuration): Query {
     hydrate,
     snapshot,
     once,
+    sequence,
+    next,
     stream,
     caches,
     events: localEvents,
