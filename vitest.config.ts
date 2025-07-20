@@ -7,7 +7,6 @@ export default mergeConfig(
     test: {
       setupFiles: './setupTests.ts',
       update: false,
-      reporters: 'verbose',
       environment: 'happy-dom',
     },
   })

@@ -59,6 +59,16 @@
     "test:cover": "vitest run --coverage",
     "prepack": "npm run build"
   },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11.0.0"
+    },
+    "runtime": {
+      "name": "node",
+      "version": ">=24.0.0"
+    }
+  },
   "peerDependencies": {
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
