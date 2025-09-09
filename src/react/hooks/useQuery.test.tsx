@@ -20,8 +20,7 @@ describe('useQuery', function () {
     }
 
     const container = document.createElement('div')
-
-    const promise = query.once('/user', 'refetching')
+    const promise = query.next<string>('/user')
 
     // eslint-disable-next-line
     await act(async function () {
@@ -33,7 +32,9 @@ describe('useQuery', function () {
     })
 
     await act(async function () {
-      await promise
+      const result = await promise
+
+      expect(result).toBe('works')
     })
 
     expect(container.innerText).toBe('works')

@@ -178,11 +178,12 @@ export function createQuery(instanceOptions?: Configuration): Query {
       if (typeof resolver === 'function') {
         const fn = resolver as MutationFunction<T>
         const value = itemsCache.get(key)
+        const item = (await value?.item) as T
 
-        resolver = await fn((await value?.item) as T, value?.expiresAt)
+        resolver = await fn(item, value?.expiresAt)
       }
 
-      return await resolver
+      return resolver
     }
 
     const result = action(resolver)
@@ -205,8 +206,8 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * Returns the current snapshot of the given key.
    * If the item is not in the items cache, it will return `undefined`.
    */
-  function snapshot<T = unknown>(key: string): T | undefined {
-    return itemsCache.get(key)?.item as T
+  async function snapshot<T = unknown>(key: string): Promise<T | undefined> {
+    return (await itemsCache.get(key)?.item) as T
   }
 
   /**

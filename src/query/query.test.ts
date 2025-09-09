@@ -784,3 +784,25 @@ it.concurrent('can use multiple queries', async function ({ expect }) {
   expect(first).toBe('/foo')
   expect(second).toBe('/bar')
 })
+
+it.concurrent('can return a data snapshot', async function ({ expect }) {
+  const { hydrate, snapshot } = createQuery()
+
+  hydrate('key', 'value')
+
+  const value = await snapshot('key')
+
+  expect(value).toBe('value')
+})
+
+it.concurrent('can access caches', function ({ expect }) {
+  const itemsCache = new Map()
+  const resolversCache = new Map()
+
+  const { caches } = createQuery({ itemsCache, resolversCache })
+
+  const { items, resolvers } = caches()
+
+  expect(items).toBe(items)
+  expect(resolvers).toBe(resolvers)
+})

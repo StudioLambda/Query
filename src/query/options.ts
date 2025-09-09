@@ -191,7 +191,7 @@ export type AbortFunction = {
 }
 
 export type SnapshotFunction = {
-  <T = unknown>(key: string): T | undefined
+  <T = unknown>(key: string): Promise<T | undefined>
 }
 
 export type KeysFunction = {
