@@ -68,4 +68,4 @@ jobs:
         run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Build
-        run: npm run build
+        run: npm run build:only

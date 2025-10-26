@@ -50,9 +50,12 @@
     "package.json"
   ],
   "scripts": {
-    "build": "vite build",
-    "prebuild": "npm run lint",
+    "build:only": "vite build",
+    "build": "npm run build:only",
+    "prebuild": "npm run format:check && npm run lint",
     "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "dev": "vitest",
     "test": "vitest run",
     "test:ui": "vitest --ui --coverage",
@@ -100,6 +103,7 @@
     "eslint-plugin-solid": "^0.14.5",
     "globals": "^16.4.0",
     "happy-dom": "^20.0.8",
+    "prettier": "^3.6.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "solid-js": "^1.9.9",
