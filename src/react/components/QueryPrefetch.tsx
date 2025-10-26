@@ -1,6 +1,6 @@
-import type { QueryInstance } from 'query/react:hooks/useQueryInstance'
+import { type ReactNode } from 'react'
+import { type QueryInstance } from 'query/react:hooks/useQueryInstance'
 import { useQueryPrefetch } from 'query/react:hooks/useQueryPrefetch'
-import { ReactNode } from 'react'
 
 export interface QueryPrefetchProps extends QueryInstance {
   keys: string[]

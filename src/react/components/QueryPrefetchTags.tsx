@@ -1,6 +1,7 @@
 import type { QueryInstance } from 'query/react:hooks/useQueryInstance'
+import type { ReactNode, LinkHTMLAttributes } from 'react'
+import { useMemo } from 'react'
 import { useQueryPrefetch } from 'query/react:hooks/useQueryPrefetch'
-import { ReactNode, useMemo, LinkHTMLAttributes } from 'react'
 
 type Additional = LinkHTMLAttributes<HTMLLinkElement> & QueryInstance
 
