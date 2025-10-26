@@ -88,93 +88,94 @@ export function useQueryBasic<T = unknown>(
 
   const [data, setData] = useState<T>(use(promise))
 
-  function subscribeHandler() {
-    function onResolved(event: CustomEventInit<T>) {
-      startTransition(function () {
-        setData(event.detail as T)
-      })
-    }
-
-    function onMutating(event: CustomEventInit<Promise<T>>) {
-      startTransition(async function () {
-        const value = await (event.detail as Promise<T>)
-
+  useEffect(
+    function () {
+      function onResolved(event: CustomEventInit<T>) {
         startTransition(function () {
-          setData(value)
+          setData(event.detail as T)
         })
-      })
-    }
+      }
 
-    function onMutated(event: CustomEventInit<T>) {
-      startTransition(function () {
-        setData(event.detail as T)
-      })
-    }
-
-    function onHydrated(event: CustomEventInit<T>) {
-      startTransition(function () {
-        setData(event.detail as T)
-      })
-    }
-
-    function onRefetching(event: CustomEventInit<Promise<T>>) {
-      startTransition(async function () {
-        const value = await (event.detail as Promise<T>)
-
-        startTransition(function () {
-          setData(value)
-        })
-      })
-    }
-
-    function onForgotten() {
-      if (clearOnForget) {
+      function onMutating(event: CustomEventInit<Promise<T>>) {
         startTransition(async function () {
-          const data = await query<T>(key, {
-            expiration: oExpiration,
-            fetcher: oFetcher,
-            stale: oStale,
-            removeOnError: oRemoveOnError,
-            fresh: oFresh,
-          })
+          const value = await (event.detail as Promise<T>)
 
           startTransition(function () {
-            setData(data)
+            setData(value)
           })
         })
       }
-    }
 
-    const unsubscribeResolved = subscribe(key, 'resolved', onResolved)
-    const unsubscribeMutating = subscribe(key, 'mutating', onMutating)
-    const unsubscribeMutated = subscribe(key, 'mutated', onMutated)
-    const unsubscribeHydrated = subscribe(key, 'hydrated', onHydrated)
-    const unsubscribeRefetching = subscribe(key, 'refetching', onRefetching)
-    const unsubscribeForgotten = subscribe(key, 'forgotten', onForgotten)
+      function onMutated(event: CustomEventInit<T>) {
+        startTransition(function () {
+          setData(event.detail as T)
+        })
+      }
 
-    return function () {
-      unsubscribeResolved()
-      unsubscribeMutating()
-      unsubscribeMutated()
-      unsubscribeHydrated()
-      unsubscribeRefetching()
-      unsubscribeForgotten()
-    }
-  }
+      function onHydrated(event: CustomEventInit<T>) {
+        startTransition(function () {
+          setData(event.detail as T)
+        })
+      }
 
-  useEffect(subscribeHandler, [
-    query,
-    expiration,
-    subscribe,
-    key,
-    clearOnForget,
-    oExpiration,
-    oFetcher,
-    oStale,
-    oRemoveOnError,
-    oFresh,
-    startTransition,
-  ])
+      function onRefetching(event: CustomEventInit<Promise<T>>) {
+        startTransition(async function () {
+          const value = await (event.detail as Promise<T>)
+
+          startTransition(function () {
+            setData(value)
+          })
+        })
+      }
+
+      function onForgotten() {
+        if (clearOnForget) {
+          startTransition(async function () {
+            const data = await query<T>(key, {
+              expiration: oExpiration,
+              fetcher: oFetcher,
+              stale: oStale,
+              removeOnError: oRemoveOnError,
+              fresh: oFresh,
+            })
+
+            startTransition(function () {
+              setData(data)
+            })
+          })
+        }
+      }
+
+      const unsubscribeResolved = subscribe(key, 'resolved', onResolved)
+      const unsubscribeMutating = subscribe(key, 'mutating', onMutating)
+      const unsubscribeMutated = subscribe(key, 'mutated', onMutated)
+      const unsubscribeHydrated = subscribe(key, 'hydrated', onHydrated)
+      const unsubscribeRefetching = subscribe(key, 'refetching', onRefetching)
+      const unsubscribeForgotten = subscribe(key, 'forgotten', onForgotten)
+
+      return function () {
+        unsubscribeResolved()
+        unsubscribeMutating()
+        unsubscribeMutated()
+        unsubscribeHydrated()
+        unsubscribeRefetching()
+        unsubscribeForgotten()
+      }
+    },
+    [
+      query,
+      expiration,
+      subscribe,
+      key,
+      clearOnForget,
+      oExpiration,
+      oFetcher,
+      oStale,
+      oRemoveOnError,
+      oFresh,
+      startTransition,
+    ]
+  )
 
   return useMemo(
     function (): BasicResource<T> {

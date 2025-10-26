@@ -4,6 +4,7 @@ import { useQuery } from 'query/react:hooks/useQuery'
 import { act, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createQuery } from 'query:index'
+import { QueryPrefetch } from './QueryPrefetch'
 
 describe.concurrent('QueryPrefetch', function () {
   it('can prefetch keys', async ({ expect }) => {
@@ -31,9 +32,11 @@ describe.concurrent('QueryPrefetch', function () {
     await act(async function () {
       createRoot(container).render(
         <QueryProvider query={query}>
-          <Suspense fallback={<div>Loading...</div>}>
-            <Component />
-          </Suspense>
+          <QueryPrefetch keys={['/user']}>
+            <Suspense fallback={<div>Loading...</div>}>
+              <Component />
+            </Suspense>
+          </QueryPrefetch>
         </QueryProvider>
       )
     })

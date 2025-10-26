@@ -19,27 +19,21 @@ export function QueryProvider({
     [query]
   )
 
-  function broadcastCleanup() {
-    if (localQuery.broadcast()) {
+  useEffect(
+    function () {
+      const broadcast = new BroadcastChannel('query')
+
+      localQuery.configure({ broadcast })
+
       const unsubscribe = localQuery.subscribeBroadcast()
 
       return function () {
         unsubscribe()
+        broadcast.close()
       }
-    }
-
-    const channel = new BroadcastChannel('query')
-
-    localQuery.configure({ broadcast: channel })
-    const unsubscribe = localQuery.subscribeBroadcast()
-
-    return function () {
-      unsubscribe()
-      channel.close()
-    }
-  }
-
-  useEffect(broadcastCleanup, [localQuery])
+    },
+    [localQuery]
+  )
 
   const value = useMemo(
     function (): ContextValue {

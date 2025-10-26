@@ -32,58 +32,59 @@ export function useQueryStatus(key: string, options?: QueryInstance): Status {
     [expiresAt]
   )
 
-  function subscribeHandler() {
-    function onMutating() {
-      setIsMutating(true)
-    }
+  useEffect(
+    function () {
+      function onMutating() {
+        setIsMutating(true)
+      }
 
-    function onMutated() {
-      setIsMutating(false)
-      setExpiresAt(expiration(key) ?? new Date())
-    }
+      function onMutated() {
+        setIsMutating(false)
+        setExpiresAt(expiration(key) ?? new Date())
+      }
 
-    function onHydrated() {
-      setExpiresAt(expiration(key) ?? new Date())
-    }
+      function onHydrated() {
+        setExpiresAt(expiration(key) ?? new Date())
+      }
 
-    function onResolved() {
-      setExpiresAt(expiration(key) ?? new Date())
-      setIsRefetching(false)
-    }
+      function onResolved() {
+        setExpiresAt(expiration(key) ?? new Date())
+        setIsRefetching(false)
+      }
 
-    function onForgotten() {
-      setExpiresAt(expiration(key) ?? new Date())
-    }
+      function onForgotten() {
+        setExpiresAt(expiration(key) ?? new Date())
+      }
 
-    function onRefetching() {
-      setIsRefetching(true)
-    }
+      function onRefetching() {
+        setIsRefetching(true)
+      }
 
-    function onError() {
-      setIsRefetching(false)
-      setIsMutating(false)
-    }
+      function onError() {
+        setIsRefetching(false)
+        setIsMutating(false)
+      }
 
-    const unsubscribeMutating = subscribe(key, 'mutating', onMutating)
-    const unsubscribeMutated = subscribe(key, 'mutated', onMutated)
-    const unsubscribeHydrated = subscribe(key, 'hydrated', onHydrated)
-    const unsubscribeResolved = subscribe(key, 'resolved', onResolved)
-    const unsubscribeForgotten = subscribe(key, 'forgotten', onForgotten)
-    const unsubscribeRefetching = subscribe(key, 'refetching', onRefetching)
-    const unsubscribeError = subscribe(key, 'error', onError)
+      const unsubscribeMutating = subscribe(key, 'mutating', onMutating)
+      const unsubscribeMutated = subscribe(key, 'mutated', onMutated)
+      const unsubscribeHydrated = subscribe(key, 'hydrated', onHydrated)
+      const unsubscribeResolved = subscribe(key, 'resolved', onResolved)
+      const unsubscribeForgotten = subscribe(key, 'forgotten', onForgotten)
+      const unsubscribeRefetching = subscribe(key, 'refetching', onRefetching)
+      const unsubscribeError = subscribe(key, 'error', onError)
 
-    return function () {
-      unsubscribeMutating()
-      unsubscribeMutated()
-      unsubscribeHydrated()
-      unsubscribeResolved()
-      unsubscribeForgotten()
-      unsubscribeRefetching()
-      unsubscribeError()
-    }
-  }
-
-  useEffect(subscribeHandler, [key, subscribe, expiration, setExpiresAt])
+      return function () {
+        unsubscribeMutating()
+        unsubscribeMutated()
+        unsubscribeHydrated()
+        unsubscribeResolved()
+        unsubscribeForgotten()
+        unsubscribeRefetching()
+        unsubscribeError()
+      }
+    },
+    [key, subscribe, expiration, setExpiresAt]
+  )
 
   return useMemo(
     function () {
