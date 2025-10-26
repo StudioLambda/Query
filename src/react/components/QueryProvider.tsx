@@ -43,9 +43,9 @@ export function QueryProvider({
 
   const value = useMemo(
     function (): ContextValue {
-      return { query, clearOnForget, ignoreTransitionContext }
+      return { query: localQuery, clearOnForget, ignoreTransitionContext }
     },
-    [query, clearOnForget, ignoreTransitionContext]
+    [localQuery, clearOnForget, ignoreTransitionContext]
   )
 
   return <Context value={value}>{children}</Context>
