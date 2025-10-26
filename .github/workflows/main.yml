@@ -10,7 +10,7 @@ concurrency:
 
 jobs:
   lint:
-    name: Lint
+    name: Lint Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -30,7 +30,7 @@ jobs:
         run: npm run lint
 
   test:
-    name: Test
+    name: Unit Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
