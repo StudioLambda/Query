@@ -38,6 +38,9 @@ export default defineConfig({
   plugins: [
     react({
       include: ['src/react/**/*.tsx'],
+      babel: {
+        plugins: ['babel-plugin-react-compiler'],
+      },
     }),
     // solid({
     //   include: ['src/solid/**/*.tsx'],

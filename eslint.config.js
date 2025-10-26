@@ -7,7 +7,7 @@ import solid from 'eslint-plugin-solid'
 import tseslint from 'typescript-eslint'
 
 export default defineConfig(
-  { ignores: ['dist', 'coverage', 'node_modules'] },
+  { ignores: ['dist*', 'coverage', 'node_modules'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{js,jsx,ts,tsx}'],
@@ -34,8 +34,7 @@ export default defineConfig(
       'react-refresh': reactRefresh,
     },
     rules: {
-      ...reactHooks.configs.recommended.rules,
-      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      ...reactHooks.configs['recommended-latest'].rules,
     },
   },
   {
