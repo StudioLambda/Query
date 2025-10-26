@@ -26,42 +26,38 @@ export function useQueryActions<T = unknown>(
 
   const { query, mutate, forget } = useQueryInstance(options)
 
-  function refetchHandler(refetchOptions?: Options<T>) {
-    return query<T>(key, {
-      stale: oStale ?? false,
-      expiration: oExpiration,
-      fetcher: oFetcher,
-      removeOnError: oRemoveOnError,
-      fresh: oFresh,
-      ...refetchOptions,
-    })
-  }
+  const refetch = useCallback(
+    function (refetchOptions?: Options<T>) {
+      return query<T>(key, {
+        stale: oStale ?? false,
+        expiration: oExpiration,
+        fetcher: oFetcher,
+        removeOnError: oRemoveOnError,
+        fresh: oFresh,
+        ...refetchOptions,
+      })
+    },
+    [query, key, oExpiration, oFetcher, oStale, oRemoveOnError, oFresh]
+  )
 
-  const refetch = useCallback(refetchHandler, [
-    query,
-    key,
-    oExpiration,
-    oFetcher,
-    oStale,
-    oRemoveOnError,
-    oFresh,
-  ])
+  const localMutate = useCallback(
+    function <T = unknown>(value: MutationValue<T>, options?: MutateOptions<T>) {
+      return mutate(key, value, options)
+    },
+    [mutate, key]
+  )
 
-  function mutateHandler<T = unknown>(value: MutationValue<T>, options?: MutateOptions<T>) {
-    return mutate(key, value, options)
-  }
+  const localForget = useCallback(
+    async function () {
+      await forget(key)
+    },
+    [forget, key]
+  )
 
-  const localMutate = useCallback(mutateHandler, [mutate, key])
-
-  async function forgetHandler() {
-    await forget(key)
-  }
-
-  const localForget = useCallback(forgetHandler, [forget, key])
-
-  function actionsHandler() {
-    return { refetch, mutate: localMutate, forget: localForget }
-  }
-
-  return useMemo(actionsHandler, [refetch, localMutate, localForget])
+  return useMemo(
+    function () {
+      return { refetch, mutate: localMutate, forget: localForget }
+    },
+    [refetch, localMutate, localForget]
+  )
 }

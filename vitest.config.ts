@@ -6,7 +6,6 @@ export default mergeConfig(
   defineConfig({
     test: {
       setupFiles: './setupTests.ts',
-      update: false,
       environment: 'happy-dom',
     },
   })

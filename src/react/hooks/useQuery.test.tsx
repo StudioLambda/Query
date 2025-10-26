@@ -4,7 +4,7 @@ import { createQuery } from 'query:index'
 import { act, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 
-describe('useQuery', function () {
+describe.concurrent('useQuery', function () {
   it('can query data', async ({ expect }) => {
     function fetcher() {
       return Promise.resolve('works')

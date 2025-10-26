@@ -8,11 +8,12 @@ export interface QueryTransitionProps {
 }
 
 export function QueryTransition({ children, startTransition, isPending }: QueryTransitionProps) {
-  function valueHandler(): QueryTransitionContextValue {
-    return { startTransition, isPending }
-  }
-
-  const value = useMemo(valueHandler, [startTransition, isPending])
+  const value = useMemo(
+    function (): QueryTransitionContextValue {
+      return { startTransition, isPending }
+    },
+    [startTransition, isPending]
+  )
 
   return <TransitionContext value={value}>{children}</TransitionContext>
 }

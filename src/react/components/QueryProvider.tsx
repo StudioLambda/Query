@@ -12,11 +12,12 @@ export function QueryProvider({
   ignoreTransitionContext,
   query,
 }: QueryProviderProps) {
-  function queryInstance() {
-    return query ?? createQuery()
-  }
-
-  const localQuery = useMemo<Query>(queryInstance, [query])
+  const localQuery = useMemo<Query>(
+    function () {
+      return query ?? createQuery()
+    },
+    [query]
+  )
 
   function broadcastCleanup() {
     if (localQuery.broadcast()) {
@@ -40,11 +41,12 @@ export function QueryProvider({
 
   useEffect(broadcastCleanup, [localQuery])
 
-  function valueHandler(): ContextValue {
-    return { query, clearOnForget, ignoreTransitionContext }
-  }
-
-  const value = useMemo(valueHandler, [query, clearOnForget, ignoreTransitionContext])
+  const value = useMemo(
+    function (): ContextValue {
+      return { query, clearOnForget, ignoreTransitionContext }
+    },
+    [query, clearOnForget, ignoreTransitionContext]
+  )
 
   return <Context value={value}>{children}</Context>
 }

@@ -4,7 +4,7 @@ import { act, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { useQueryPrefetch } from './useQueryPrefetch'
 
-describe('useQueryPrefetch', function () {
+describe.concurrent('useQueryPrefetch', function () {
   it('can prefetch data', async ({ expect }) => {
     function fetcher(key: string) {
       return Promise.resolve(key)

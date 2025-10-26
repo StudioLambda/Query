@@ -22,9 +22,10 @@ export function useQuery<T = unknown>(key: string, options?: ResourceOptions<T>)
   const actions = useQueryActions<T>(key, options)
   const status = useQueryStatus(key, options)
 
-  function resourceHandler(): Resource<T> {
-    return { ...basic, ...actions, ...status }
-  }
-
-  return useMemo(resourceHandler, [basic, actions, status])
+  return useMemo(
+    function (): Resource<T> {
+      return { ...basic, ...actions, ...status }
+    },
+    [basic, actions, status]
+  )
 }

@@ -12,31 +12,25 @@ export function useQueryStatus(key: string, options?: QueryInstance): Status {
   useDebugValue('useQueryStatus')
 
   const { expiration, subscribe } = useQueryInstance(options)
-  const [expiresAt, setExpiresAt] = useState<Date>(expiration(key) ?? new Date())
-  const [isExpired, setIsExpired] = useState(Date.now() > expiresAt.getTime())
+  const [expiresAt, setExpiresAt] = useState<Date>(() => expiration(key) ?? new Date())
+  const [isExpired, setIsExpired] = useState(() => Date.now() > expiresAt.getTime())
   const [isRefetching, setIsRefetching] = useState(false)
   const [isMutating, setIsMutating] = useState(false)
 
-  function expirationHandler() {
-    if (Date.now() >= expiresAt.getTime()) {
-      setIsExpired(true)
-      return
-    }
+  useEffect(
+    function () {
+      function handler() {
+        setIsExpired(true)
+      }
 
-    setIsExpired(false)
+      const id = setTimeout(handler, expiresAt.getTime() - Date.now())
 
-    function handler() {
-      setIsExpired(true)
-    }
-
-    const id = setTimeout(handler, expiresAt.getTime() - Date.now())
-
-    return function () {
-      clearTimeout(id)
-    }
-  }
-
-  useEffect(expirationHandler, [expiresAt])
+      return function () {
+        clearTimeout(id)
+      }
+    },
+    [expiresAt]
+  )
 
   function subscribeHandler() {
     function onMutating() {
@@ -91,9 +85,10 @@ export function useQueryStatus(key: string, options?: QueryInstance): Status {
 
   useEffect(subscribeHandler, [key, subscribe, expiration, setExpiresAt])
 
-  function statusHandler() {
-    return { expiresAt, isExpired, isRefetching, isMutating }
-  }
-
-  return useMemo(statusHandler, [expiresAt, isExpired, isRefetching, isMutating])
+  return useMemo(
+    function () {
+      return { expiresAt, isExpired, isRefetching, isMutating }
+    },
+    [expiresAt, isExpired, isRefetching, isMutating]
+  )
 }
