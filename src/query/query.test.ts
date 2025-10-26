@@ -3,10 +3,8 @@ import { createQuery, defaultFetcher, FetcherAdditional } from 'query:index'
 
 describe.concurrent('query', function () {
   it('can query resources', async ({ expect }) => {
-    async function fetcher(key: string) {
-      await new Promise((r) => setTimeout(r, 200))
-
-      return key
+    function fetcher(key: string) {
+      return Promise.resolve(key)
     }
 
     const { query } = createQuery({ fetcher })
@@ -52,19 +50,31 @@ describe.concurrent('query', function () {
     expect(resource).toBe('example')
   })
 
-  it('returns the same promise when resources are resolving', async ({ expect }) => {
+  it('returns the same promise when resources are resolving', async ({ expect, signal }) => {
+    const controller = new AbortController()
+    const s = AbortSignal.any([controller.signal, signal])
+
     let times = 0
-    async function fetcher() {
-      await new Promise((r) => setTimeout(r, 200))
-      times++
-      return 'example'
+
+    function fetcher() {
+      return new Promise(function (resolve) {
+        s.addEventListener('abort', function () {
+          times++
+          resolve('example')
+        })
+      })
     }
 
     const { query } = createQuery({ fetcher })
 
-    void query<string>('example-key')
-    await query<string>('example-key')
+    const a = query<string>('example-key')
+    const b = query<string>('example-key')
 
+    controller.abort()
+
+    await Promise.all([a, b])
+
+    expect(a).toBe(b)
     expect(times).toBe(1)
   })
 
@@ -243,12 +253,9 @@ describe.concurrent('query', function () {
     const err = new Error('aborted')
 
     function fetcher(_key: string, { signal }: FetcherAdditional) {
-      return new Promise(function (resolve, reject) {
+      return new Promise(function (_resolve, reject) {
         signal.addEventListener('abort', function () {
           reject(err)
-        })
-        void new Promise((r) => setTimeout(r, 200)).then(function () {
-          resolve('example')
         })
       })
     }
@@ -276,12 +283,9 @@ describe.concurrent('query', function () {
     const err = new Error('aborted')
 
     function fetcher(_key: string, { signal }: FetcherAdditional) {
-      return new Promise(function (resolve, reject) {
+      return new Promise(function (_resolve, reject) {
         signal.addEventListener('abort', function () {
           reject(err)
-        })
-        void new Promise((r) => setTimeout(r, 200)).then(function () {
-          resolve('example')
         })
       })
     }
@@ -405,12 +409,9 @@ describe.concurrent('query', function () {
     const err = new Error('aborted')
 
     function fetcher(_key: string, { signal }: FetcherAdditional) {
-      return new Promise(function (resolve, reject) {
+      return new Promise(function (_resolve, reject) {
         signal.addEventListener('abort', function () {
           reject(err)
-        })
-        void new Promise((r) => setTimeout(r, 200)).then(function () {
-          resolve('example')
         })
       })
     }
@@ -422,16 +423,13 @@ describe.concurrent('query', function () {
     await expect(() => result).rejects.toThrowError(err)
   })
 
-  it('can abort query 2', async ({ expect }) => {
+  it('can abort query with array key', async ({ expect }) => {
     const err = new Error('aborted')
 
     function fetcher(_key: string, { signal }: FetcherAdditional) {
-      return new Promise(function (resolve, reject) {
+      return new Promise(function (_resolve, reject) {
         signal.addEventListener('abort', function () {
           reject(err)
-        })
-        void new Promise((r) => setTimeout(r, 200)).then(function () {
-          resolve('example')
         })
       })
     }
@@ -443,16 +441,13 @@ describe.concurrent('query', function () {
     await expect(() => result).rejects.toThrowError(err)
   })
 
-  it('can abort query 3', async ({ expect }) => {
+  it('can abort all queries', async ({ expect }) => {
     const err = new Error('aborted')
 
     function fetcher(_key: string, { signal }: FetcherAdditional) {
-      return new Promise(function (resolve, reject) {
+      return new Promise(function (_resolve, reject) {
         signal.addEventListener('abort', function () {
           reject(err)
-        })
-        void new Promise((r) => setTimeout(r, 200)).then(function () {
-          resolve('example')
         })
       })
     }
@@ -749,10 +744,16 @@ describe.concurrent('query', function () {
     expect(event).toBeDefined()
   })
 
-  it('uses the same promises for the same result', async ({ expect }) => {
-    async function fetcher() {
-      await new Promise((r) => setTimeout(r, 100))
-      return 'works'
+  it('uses the same promises for the same result', ({ expect, signal }) => {
+    const controller = new AbortController()
+    const s = AbortSignal.any([controller.signal, signal])
+
+    function fetcher() {
+      return new Promise(function (resolve) {
+        s.addEventListener('abort', function () {
+          resolve('works')
+        })
+      })
     }
 
     const { query } = createQuery({ fetcher })
@@ -760,13 +761,13 @@ describe.concurrent('query', function () {
     const promise = query<string>('/')
     const promise2 = query<string>('/')
 
-    expect(promise === promise2).toBeTruthy()
+    expect(promise).toBe(promise2)
 
-    await new Promise((r) => setTimeout(r, 150))
+    controller.abort()
 
     const promise3 = query<string>('/')
 
-    expect(promise === promise3).toBeTruthy()
+    expect(promise).toBe(promise3)
   })
 
   it('can use multiple queries', async function ({ expect }) {
