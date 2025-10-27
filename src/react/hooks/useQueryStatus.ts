@@ -83,7 +83,7 @@ export function useQueryStatus(key: string, options?: QueryInstance): Status {
         unsubscribeError()
       }
     },
-    [key, subscribe, expiration, setExpiresAt]
+    [key, subscribe, expiration]
   )
 
   return useMemo(
