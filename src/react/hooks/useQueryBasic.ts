@@ -1,4 +1,4 @@
-import { useEffect, use, useState, useMemo, useDebugValue, useTransition } from 'react'
+import { useEffect, use, useState, useTransition } from 'react'
 import { type ContextValue } from 'query/react:context'
 import { type Options } from 'query:index'
 import { useQueryContext } from './useQueryContext'
@@ -16,8 +16,6 @@ export function useQueryBasic<T = unknown>(
   key: string,
   options?: BasicResourceOptions<T>
 ): BasicResource<T> {
-  useDebugValue('useQueryBasic')
-
   const { clearOnForget: cClearOnForget, ignoreTransitionContext: cIgnoreTransitionContext } =
     useQueryContext()
 
@@ -36,55 +34,22 @@ export function useQueryBasic<T = unknown>(
 
   const [isLocalPending, startLocalTransition] = useTransition()
   const { query, expiration, subscribe } = useQueryInstance(options)
+  const ignoreTransitionContext = oIgnoreTransitionContext ?? cIgnoreTransitionContext ?? false
+  const isPending = ignoreTransitionContext ? isLocalPending : (isContextPending ?? isLocalPending)
 
-  const ignoreTransitionContext = useMemo(
-    function () {
-      return oIgnoreTransitionContext ?? cIgnoreTransitionContext ?? false
-    },
-    [oIgnoreTransitionContext, cIgnoreTransitionContext]
-  )
+  const startTransition = ignoreTransitionContext
+    ? startLocalTransition
+    : (startContextTransition ?? startLocalTransition)
 
-  const isPending = useMemo(
-    function () {
-      if (ignoreTransitionContext) {
-        return isLocalPending
-      }
+  const clearOnForget = oClearOnForget ?? cClearOnForget ?? false
 
-      return isContextPending ?? isLocalPending
-    },
-    [isContextPending, isLocalPending, ignoreTransitionContext]
-  )
-
-  const startTransition = useMemo(
-    function () {
-      if (ignoreTransitionContext) {
-        return startLocalTransition
-      }
-
-      return startContextTransition ?? startLocalTransition
-    },
-    [startContextTransition, startLocalTransition, ignoreTransitionContext]
-  )
-
-  const clearOnForget = useMemo(
-    function () {
-      return oClearOnForget ?? cClearOnForget ?? false
-    },
-    [oClearOnForget, cClearOnForget]
-  )
-
-  const promise = useMemo(
-    function () {
-      return query<T>(key, {
-        expiration: oExpiration,
-        fetcher: oFetcher,
-        stale: oStale,
-        removeOnError: oRemoveOnError,
-        fresh: oFresh,
-      })
-    },
-    [query, key, oExpiration, oFetcher, oStale, oRemoveOnError, oFresh]
-  )
+  const promise = query<T>(key, {
+    expiration: oExpiration,
+    fetcher: oFetcher,
+    stale: oStale,
+    removeOnError: oRemoveOnError,
+    fresh: oFresh,
+  })
 
   const [data, setData] = useState<T>(use(promise))
 
@@ -177,10 +142,5 @@ export function useQueryBasic<T = unknown>(
     ]
   )
 
-  return useMemo(
-    function (): BasicResource<T> {
-      return { data, isPending }
-    },
-    [data, isPending]
-  )
+  return { data, isPending }
 }

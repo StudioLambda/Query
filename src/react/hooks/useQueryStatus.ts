@@ -1,4 +1,4 @@
-import { useDebugValue, useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQueryInstance, type QueryInstance } from './useQueryInstance'
 
 export interface Status {
@@ -9,8 +9,6 @@ export interface Status {
 }
 
 export function useQueryStatus(key: string, options?: QueryInstance): Status {
-  useDebugValue('useQueryStatus')
-
   const { expiration, subscribe } = useQueryInstance(options)
   const [expiresAt, setExpiresAt] = useState<Date>(() => expiration(key) ?? new Date())
   const [isExpired, setIsExpired] = useState(() => Date.now() > expiresAt.getTime())
@@ -86,10 +84,5 @@ export function useQueryStatus(key: string, options?: QueryInstance): Status {
     [key, subscribe, expiration]
   )
 
-  return useMemo(
-    function () {
-      return { expiresAt, isExpired, isRefetching, isMutating }
-    },
-    [expiresAt, isExpired, isRefetching, isMutating]
-  )
+  return { expiresAt, isExpired, isRefetching, isMutating }
 }

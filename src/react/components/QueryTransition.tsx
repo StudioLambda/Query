@@ -1,5 +1,5 @@
-import { TransitionContext, type QueryTransitionContextValue } from 'query/react:transition'
-import { useMemo, type ReactNode, type TransitionStartFunction } from 'react'
+import { TransitionContext } from 'query/react:transition'
+import { type ReactNode, type TransitionStartFunction } from 'react'
 
 export interface QueryTransitionProps {
   isPending: boolean
@@ -8,12 +8,7 @@ export interface QueryTransitionProps {
 }
 
 export function QueryTransition({ children, startTransition, isPending }: QueryTransitionProps) {
-  const value = useMemo(
-    function (): QueryTransitionContextValue {
-      return { startTransition, isPending }
-    },
-    [startTransition, isPending]
-  )
+  const value = { startTransition, isPending }
 
   return <TransitionContext value={value}>{children}</TransitionContext>
 }
