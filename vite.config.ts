@@ -42,7 +42,7 @@ export default defineConfig({
     react({
       include: ['src/react/**/*.tsx'],
       babel: {
-        plugins: ['babel-plugin-react-compiler'],
+        plugins: [['babel-plugin-react-compiler']],
       },
     }),
     // solid({

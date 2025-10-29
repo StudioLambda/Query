@@ -1,6 +1,6 @@
-import { useEffect, useMemo, type ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Context, type ContextValue } from 'query/react:context'
-import { createQuery, type Query } from 'query:index'
+import { createQuery } from 'query:index'
 
 export interface QueryProviderProps extends ContextValue {
   children?: ReactNode
@@ -12,12 +12,7 @@ export function QueryProvider({
   ignoreTransitionContext,
   query,
 }: QueryProviderProps) {
-  const localQuery = useMemo<Query>(
-    function () {
-      return query ?? createQuery()
-    },
-    [query]
-  )
+  const localQuery = query ?? createQuery()
 
   useEffect(
     function () {
@@ -35,12 +30,7 @@ export function QueryProvider({
     [localQuery]
   )
 
-  const value = useMemo(
-    function (): ContextValue {
-      return { query: localQuery, clearOnForget, ignoreTransitionContext }
-    },
-    [localQuery, clearOnForget, ignoreTransitionContext]
-  )
+  const value = { query: localQuery, clearOnForget, ignoreTransitionContext }
 
   return <Context value={value}>{children}</Context>
 }
