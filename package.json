@@ -1,37 +1,39 @@
 {
   "name": "@studiolambda/query",
   "version": "1.4.0",
-  "license": "MIT",
+  "description": "Lightweight, isomorphic and framework agnostic asynchronous data management for modern UIs",
   "keywords": [
+    "data-management",
+    "fetch",
+    "isomorphic",
+    "query",
+    "react",
+    "react-query",
     "stale-while-revalidate",
     "swr",
-    "react-query",
-    "isomorphic",
-    "fetch",
-    "query",
-    "data-management",
     "ui",
-    "vanilla",
-    "react"
+    "vanilla"
   ],
-  "description": "Lightweight, isomorphic and framework agnostic asynchronous data management for modern UIs",
+  "homepage": "https://erik.cat/blog/query-docs",
+  "license": "MIT",
   "author": {
     "name": "Erik C. Forés",
     "email": "soc@erik.cat",
     "url": "https://erik.cat"
   },
-  "homepage": "https://erik.cat/blog/query-docs",
   "repository": {
     "type": "git",
     "url": "https://github.com/StudioLambda/Query.git"
   },
-  "engines": {
-    "node": ">=18.0.0"
-  },
+  "files": [
+    "dist",
+    "package.json"
+  ],
   "type": "module",
-  "types": "./dist/src/query/index.d.ts",
+  "sideEffects": false,
   "main": "./dist/query.cjs",
   "module": "./dist/query.js",
+  "types": "./dist/src/query/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
@@ -45,32 +47,38 @@
       "require": "./dist/query_react.cjs"
     }
   },
-  "files": [
-    "dist",
-    "package.json"
-  ],
   "scripts": {
     "build:only": "vite build",
     "build": "npm run build:only",
     "prebuild": "npm run format:check && npm run lint",
-    "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "lint": "oxlint --react-plugin --vitest-plugin",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
     "dev": "vitest",
     "test": "vitest run",
     "test:ui": "vitest --ui --coverage",
     "test:cover": "vitest run --coverage",
     "prepack": "npm run build"
   },
-  "devEngines": {
-    "packageManager": {
-      "name": "npm",
-      "version": ">=11.0.0"
-    },
-    "runtime": {
-      "name": "node",
-      "version": ">=24.0.0"
-    }
+  "devDependencies": {
+    "@types/node": "^25.1.0",
+    "@types/react": "19.2.10",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "^5.1.2",
+    "@vitest/coverage-v8": "^4.0.18",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "happy-dom": "^20.4.0",
+    "oxfmt": "^0.27.0",
+    "oxlint": "^1.42.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-error-boundary": "^6.1.0",
+    "solid-js": "^1.9.11",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.12",
+    "vite-plugin-dts": "^4.5.4",
+    "vite-plugin-solid": "^2.11.10",
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "react": "^19.1.0",
@@ -88,31 +96,17 @@
       "optional": true
     }
   },
-  "sideEffects": false,
-  "devDependencies": {
-    "@types/node": "^24.9.1",
-    "@types/react": "19.1.12",
-    "@types/react-dom": "19.1.9",
-    "@typescript-eslint/eslint-plugin": "^8.46.2",
-    "@typescript-eslint/parser": "^8.46.2",
-    "@vitejs/plugin-react": "^5.1.0",
-    "@vitest/coverage-v8": "^4.0.3",
-    "babel-plugin-react-compiler": "^1.0.0",
-    "eslint": "^9.38.0",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-react-refresh": "^0.4.24",
-    "eslint-plugin-solid": "^0.14.5",
-    "globals": "^16.4.0",
-    "happy-dom": "^20.0.8",
-    "prettier": "^3.6.2",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "solid-js": "^1.9.9",
-    "typescript": "~5.9.3",
-    "typescript-eslint": "^8.46.2",
-    "vite": "^7.1.12",
-    "vite-plugin-dts": "^4.5.4",
-    "vite-plugin-solid": "^2.11.10",
-    "vitest": "^4.0.3"
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11.0.0"
+    },
+    "runtime": {
+      "name": "node",
+      "version": ">=24.0.0"
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

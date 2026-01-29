@@ -38,6 +38,10 @@ export interface Configuration extends Options {
   readonly broadcast?: BroadcastChannel
 }
 
+/**
+ * Additional parameters passed to the fetcher function,
+ * providing an abort signal for cancellation support.
+ */
 export interface FetcherAdditional {
   /**
    * An abort signal to cancel pending queries.
@@ -125,10 +129,22 @@ export type QueryFunction = {
   <T = unknown>(key: string, options?: Options<T>): Promise<T>
 }
 
+/**
+ * Function type that calculates the expiration time in milliseconds
+ * for a cached item based on its value.
+ *
+ * @template T - The type of the cached item.
+ */
 export type ExpirationOptionFunction<T = unknown> = {
   (item: T): number
 }
 
+/**
+ * Function type for the data fetcher that retrieves data for a given key.
+ * Receives an abort signal for cancellation support.
+ *
+ * @template T - The type of the fetched data.
+ */
 export type FetcherFunction<T = unknown> = {
   (key: string, additional: FetcherAdditional): Promise<T>
 }
@@ -137,6 +153,10 @@ export type FetcherFunction<T = unknown> = {
  * The mutate function options.
  */
 export interface HydrateOptions<T = unknown> {
+  /**
+   * Custom expiration function for the hydrated item, overriding
+   * the default expiration configuration.
+   */
   expiration?: ExpirationOptionFunction<T>
 }
 
@@ -144,6 +164,10 @@ export interface HydrateOptions<T = unknown> {
  * The mutate function options.
  */
 export interface MutateOptions<T = unknown> {
+  /**
+   * Custom expiration function for the mutated item, overriding
+   * the default expiration configuration.
+   */
   expiration?: ExpirationOptionFunction<T>
 }
 
@@ -166,42 +190,82 @@ export type HydrateFunction = {
  */
 export type Unsubscriber = () => void
 
+/**
+ * Function type that returns the first event that occurs for a given key.
+ * Subscribes to the event and automatically unsubscribes after receiving it.
+ */
 export type OnceFunction = {
   <T = unknown>(key: string, event: QueryEvent): Promise<CustomEventInit<T>>
 }
 
+/**
+ * Function type that returns an async generator yielding events as they
+ * occur for a given key, allowing iteration over a sequence of events.
+ */
 export type SequenceFunction = {
   <T = unknown>(key: string, event: QueryEvent): AsyncGenerator<CustomEventInit<T>>
 }
 
+/**
+ * Function type that waits for and returns the next resolved value(s)
+ * for one or more keys after a refetching event occurs.
+ */
 export type NextFunction = {
   <T = unknown>(keys: string | { [K in keyof T]: string }): Promise<T>
 }
 
+/**
+ * Function type that returns an async generator yielding resolved values
+ * as they come in, allowing continuous streaming of query results.
+ */
 export type StreamFunction = {
   <T = unknown>(keys: string | { [K in keyof T]: string }): AsyncGenerator<T>
 }
 
+/**
+ * Function type for updating the query instance configuration at runtime.
+ * Allows partial updates to the configuration options.
+ */
 export type ConfigureFunction = {
   (options?: Partial<Configuration>): void
 }
 
+/**
+ * Function type for aborting pending query resolvers. Can abort all
+ * resolvers, specific keys, or provide a custom abort reason.
+ */
 export type AbortFunction = {
   (key?: string | string[], reason?: unknown): void
 }
 
+/**
+ * Function type that returns the current cached value for a key without
+ * triggering a fetch. Returns undefined if the key is not in the cache.
+ */
 export type SnapshotFunction = {
   <T = unknown>(key: string): Promise<T | undefined>
 }
 
+/**
+ * Function type that returns all keys currently stored in the specified
+ * cache (items or resolvers).
+ */
 export type KeysFunction = {
   (cache?: CacheType): string[]
 }
 
+/**
+ * Function type that returns the expiration date of a cached item.
+ * Returns undefined if the key is not in the cache.
+ */
 export type ExpirationFunction = {
   (key: string): Date | undefined
 }
 
+/**
+ * Function type for removing cached data. Can forget specific keys,
+ * multiple keys, or keys matching a regular expression pattern.
+ */
 export type ForgetFunction = {
   (keys?: string | string[] | RegExp): Promise<void>
 }
@@ -341,6 +405,12 @@ export type QueryEvent =
   | 'hydrated'
   | 'error'
 
+/**
+ * Callback function type for event subscriptions. Receives the event
+ * with its detail payload when the subscribed event occurs.
+ *
+ * @template T - The type of the event detail payload.
+ */
 export type SubscribeListener<T> = (event: CustomEventInit<T>) => void
 
 /**
@@ -369,5 +439,8 @@ export interface EmitFunction {
   <T = unknown>(key: string, event: QueryEvent, detail: T): void
 }
 
-// TriggerFunction is used to trigger a deferred promise.
+/**
+ * Function type used internally to trigger a deferred promise resolution.
+ * Undefined when no trigger is pending.
+ */
 export type TriggerFunction = undefined | (() => Promise<void>)

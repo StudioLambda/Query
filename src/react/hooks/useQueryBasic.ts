@@ -1,23 +1,62 @@
-import { useEffect, use, useState, useMemo, useDebugValue, useTransition } from 'react'
+import { useEffect, use, useState, useTransition } from 'react'
 import { type ContextValue } from 'query/react:context'
 import { type Options } from 'query:index'
 import { useQueryContext } from './useQueryContext'
 import { useQueryInstance, type QueryInstance } from './useQueryInstance'
 import { useQueryTransitionContext } from './useQueryTransitionContext'
 
+/**
+ * The return type of the useQueryBasic hook, providing access to
+ * the fetched data and the current pending state.
+ *
+ * @template T - The type of the fetched data.
+ */
 export interface BasicResource<T = unknown> {
-  data: T
-  isPending: boolean
+  /**
+   * The fetched data for the given key.
+   */
+  readonly data: T
+
+  /**
+   * Indicates whether a transition is currently pending.
+   */
+  readonly isPending: boolean
 }
 
+/**
+ * Configuration options for the useQueryBasic hook, combining context values,
+ * query options, and an optional query instance override.
+ *
+ * @template T - The type of the fetched data.
+ */
 export type BasicResourceOptions<T = unknown> = ContextValue & Options<T> & QueryInstance
 
+/**
+ * A foundational React hook for fetching and subscribing to cached data.
+ * Automatically handles data fetching, caching, and updates when the cache
+ * changes. Uses React transitions for smooth UI updates during refetches.
+ *
+ * This hook provides the core data fetching functionality without the
+ * additional actions (refetch, mutate, forget) or status information.
+ * Use useQuery for a more complete solution.
+ *
+ * @template T - The type of the fetched data.
+ * @param key - A unique string identifier for the cached resource.
+ * @param options - Optional configuration for the query behavior.
+ * @returns An object containing the fetched data and pending state.
+ *
+ * @example
+ * ```tsx
+ * const { data, isPending } = useQueryBasic<User>('/api/user/1')
+ *
+ * if (isPending) return <Loading />
+ * return <UserProfile user={data} />
+ * ```
+ */
 export function useQueryBasic<T = unknown>(
   key: string,
   options?: BasicResourceOptions<T>
 ): BasicResource<T> {
-  useDebugValue('useQueryBasic')
-
   const { clearOnForget: cClearOnForget, ignoreTransitionContext: cIgnoreTransitionContext } =
     useQueryContext()
 
@@ -36,55 +75,22 @@ export function useQueryBasic<T = unknown>(
 
   const [isLocalPending, startLocalTransition] = useTransition()
   const { query, expiration, subscribe } = useQueryInstance(options)
+  const ignoreTransitionContext = oIgnoreTransitionContext ?? cIgnoreTransitionContext ?? false
+  const isPending = ignoreTransitionContext ? isLocalPending : (isContextPending ?? isLocalPending)
 
-  const ignoreTransitionContext = useMemo(
-    function () {
-      return oIgnoreTransitionContext ?? cIgnoreTransitionContext ?? false
-    },
-    [oIgnoreTransitionContext, cIgnoreTransitionContext]
-  )
+  const startTransition = ignoreTransitionContext
+    ? startLocalTransition
+    : (startContextTransition ?? startLocalTransition)
 
-  const isPending = useMemo(
-    function () {
-      if (ignoreTransitionContext) {
-        return isLocalPending
-      }
+  const clearOnForget = oClearOnForget ?? cClearOnForget ?? false
 
-      return isContextPending ?? isLocalPending
-    },
-    [isContextPending, isLocalPending, ignoreTransitionContext]
-  )
-
-  const startTransition = useMemo(
-    function () {
-      if (ignoreTransitionContext) {
-        return startLocalTransition
-      }
-
-      return startContextTransition ?? startLocalTransition
-    },
-    [startContextTransition, startLocalTransition, ignoreTransitionContext]
-  )
-
-  const clearOnForget = useMemo(
-    function () {
-      return oClearOnForget ?? cClearOnForget ?? false
-    },
-    [oClearOnForget, cClearOnForget]
-  )
-
-  const promise = useMemo(
-    function () {
-      return query<T>(key, {
-        expiration: oExpiration,
-        fetcher: oFetcher,
-        stale: oStale,
-        removeOnError: oRemoveOnError,
-        fresh: oFresh,
-      })
-    },
-    [query, key, oExpiration, oFetcher, oStale, oRemoveOnError, oFresh]
-  )
+  const promise = query<T>(key, {
+    expiration: oExpiration,
+    fetcher: oFetcher,
+    stale: oStale,
+    removeOnError: oRemoveOnError,
+    fresh: oFresh,
+  })
 
   const [data, setData] = useState<T>(use(promise))
 
@@ -177,10 +183,5 @@ export function useQueryBasic<T = unknown>(
     ]
   )
 
-  return useMemo(
-    function (): BasicResource<T> {
-      return { data, isPending }
-    },
-    [data, isPending]
-  )
+  return { data, isPending }
 }
