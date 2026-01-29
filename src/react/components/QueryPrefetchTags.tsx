@@ -46,7 +46,9 @@ export interface QueryPrefetchTagsProps extends Additional {
 export function QueryPrefetchTags({ keys, children, ...options }: QueryPrefetchTagsProps) {
   useQueryPrefetch(keys, options)
 
-  const tags = keys.map((key) => <link rel="preload" href={key} as="fetch" {...options} />)
+  const tags = keys.map((key) => (
+    <link key={key} rel="preload" href={key} as="fetch" {...options} />
+  ))
 
   return (
     <>

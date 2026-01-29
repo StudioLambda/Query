@@ -56,13 +56,14 @@ src/
 
 ## Code Style
 
-### Formatting (Prettier)
+### Formatting (Oxfmt)
 
 - Single quotes, no semicolons
 - 2-space indentation (no tabs)
 - 100 character line width
 - Trailing commas: `es5`
 - Always use parentheses in arrow functions: `(x) => x`
+- Configuration: `.oxfmtrc.json`
 
 ### Imports
 
@@ -159,12 +160,14 @@ describe.concurrent('feature', function () {
 })
 ```
 
-## ESLint
+## OxLint
 
-- TypeScript strict type checking enabled for `src/**`
-- React hooks rules for `src/react/**`
-- Solid.js rules for `src/solid/**`
-- Rule `@typescript-eslint/no-unnecessary-type-parameters` is disabled
+- Configuration: `.oxlintrc.json`
+- React plugin enabled with hooks rules
+- Vitest plugin enabled for test files
+- TypeScript plugin enabled
+- `react-in-jsx-scope` rule disabled (using new JSX transform)
+- Use `// oxlint-disable-next-line` to disable rules inline
 
 ## Environment
 

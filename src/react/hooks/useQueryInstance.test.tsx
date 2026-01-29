@@ -1,65 +1,61 @@
-import { describe, it } from 'vitest'
-import { createQuery } from 'query:index'
-import { act, Suspense } from 'react'
-import { createRoot } from 'react-dom/client'
-import { ErrNoQueryInstanceFound, useQueryInstance } from './useQueryInstance'
-import { ErrorBoundary } from 'react-error-boundary'
+import { describe, it } from "vitest";
+import { createQuery } from "query:index";
+import { act, Suspense } from "react";
+import { createRoot } from "react-dom/client";
+import { ErrNoQueryInstanceFound, useQueryInstance } from "./useQueryInstance";
 
-describe.concurrent('useQueryInstance', function () {
-  it('can get a query instance', async ({ expect }) => {
+describe("useQueryInstance", function () {
+  it("can get a query instance", async ({ expect }) => {
     function fetcher(key: string) {
-      return Promise.resolve(key)
+      return Promise.resolve(key);
     }
 
-    const query = createQuery({ fetcher })
-    const options = { query }
+    const query = createQuery({ fetcher });
+    const options = { query };
+    let queryFromHook: unknown = null;
 
     function Component() {
-      const query = useQueryInstance(options)
-      expect(query).not.toBeNull()
-
-      return null
+      queryFromHook = useQueryInstance(options);
+      return null;
     }
 
-    const container = document.createElement('div')
+    const container = document.createElement("div");
 
-    // eslint-disable-next-line
+    // oxlint-disable-next-line
     await act(async function () {
       createRoot(container).render(
         <Suspense fallback="loading">
           <Component />
-        </Suspense>
-      )
-    })
-  })
+        </Suspense>,
+      );
+    });
 
-  it('can throws if no query instance is found', async ({ expect }) => {
+    expect(queryFromHook).not.toBeNull();
+  });
+
+  it("throws if no query instance is found", async ({ expect }) => {
+    let caughtError: Error | undefined = undefined;
+
     function Component() {
-      const query = useQueryInstance()
-      expect(query).toBeNull()
-
-      return null
+      try {
+        useQueryInstance();
+      } catch (e) {
+        caughtError = e as Error;
+      }
+      return null;
     }
 
-    const container = document.createElement('div')
-    let err: Error | undefined = undefined
+    const container = document.createElement("div");
 
-    // eslint-disable-next-line
+    // oxlint-disable-next-line
     await act(async function () {
-      function onError(e: Error) {
-        err = e
-      }
-
       createRoot(container).render(
-        <ErrorBoundary fallback={<></>} onError={onError}>
-          <Suspense fallback="loading">
-            <Component />
-          </Suspense>
-        </ErrorBoundary>
-      )
-    })
+        <Suspense fallback="loading">
+          <Component />
+        </Suspense>,
+      );
+    });
 
-    expect(err).toBeDefined()
-    expect(err).toBe(ErrNoQueryInstanceFound)
-  })
-})
+    expect(caughtError).toBe(ErrNoQueryInstanceFound);
+  });
+});
