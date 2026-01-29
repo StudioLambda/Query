@@ -5,13 +5,54 @@ import { useQueryContext } from './useQueryContext'
 import { useQueryInstance, type QueryInstance } from './useQueryInstance'
 import { useQueryTransitionContext } from './useQueryTransitionContext'
 
+/**
+ * The return type of the useQueryBasic hook, providing access to
+ * the fetched data and the current pending state.
+ *
+ * @template T - The type of the fetched data.
+ */
 export interface BasicResource<T = unknown> {
-  data: T
-  isPending: boolean
+  /**
+   * The fetched data for the given key.
+   */
+  readonly data: T
+
+  /**
+   * Indicates whether a transition is currently pending.
+   */
+  readonly isPending: boolean
 }
 
+/**
+ * Configuration options for the useQueryBasic hook, combining context values,
+ * query options, and an optional query instance override.
+ *
+ * @template T - The type of the fetched data.
+ */
 export type BasicResourceOptions<T = unknown> = ContextValue & Options<T> & QueryInstance
 
+/**
+ * A foundational React hook for fetching and subscribing to cached data.
+ * Automatically handles data fetching, caching, and updates when the cache
+ * changes. Uses React transitions for smooth UI updates during refetches.
+ *
+ * This hook provides the core data fetching functionality without the
+ * additional actions (refetch, mutate, forget) or status information.
+ * Use useQuery for a more complete solution.
+ *
+ * @template T - The type of the fetched data.
+ * @param key - A unique string identifier for the cached resource.
+ * @param options - Optional configuration for the query behavior.
+ * @returns An object containing the fetched data and pending state.
+ *
+ * @example
+ * ```tsx
+ * const { data, isPending } = useQueryBasic<User>('/api/user/1')
+ *
+ * if (isPending) return <Loading />
+ * return <UserProfile user={data} />
+ * ```
+ */
 export function useQueryBasic<T = unknown>(
   key: string,
   options?: BasicResourceOptions<T>

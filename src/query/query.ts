@@ -122,6 +122,15 @@ export function createQuery(instanceOptions?: Configuration): Query {
     instanceFresh = options?.fresh ?? instanceFresh
   }
 
+  /**
+   * Emits an event to all active subscribers for a given key.
+   * Also broadcasts certain events (mutated, resolved, hydrated, forgotten)
+   * to other browser contexts via the BroadcastChannel if configured.
+   *
+   * @param key - The cache key associated with the event.
+   * @param event - The type of event to emit.
+   * @param detail - The payload to include with the event.
+   */
   function emit<T = unknown>(key: string, event: QueryEvent, detail: T) {
     events.dispatchEvent(new CustomEvent(`${event}:${key}`, { detail }))
 
@@ -141,7 +150,6 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * If there's a pending resolver for that key, the `refetching`
    * event is fired immediatly.
    */
-
   function subscribe<T = unknown>(
     key: string,
     event: QueryEvent,
@@ -492,6 +500,13 @@ export function createQuery(instanceOptions?: Configuration): Query {
     }
   }
 
+  /**
+   * Waits for the next refetching event on one or more keys and returns
+   * the resolved values. Useful for synchronizing with query updates.
+   *
+   * @param keys - A single key or an object mapping property names to keys.
+   * @returns A promise that resolves with the fetched value(s).
+   */
   async function next<T = unknown>(keys: string | { [K in keyof T]: string }): Promise<T> {
     const iterator = (Array.isArray(keys) ? keys : [keys]) as string[]
     const promises = iterator.map((key) => once(key, 'refetching'))
@@ -501,12 +516,27 @@ export function createQuery(instanceOptions?: Configuration): Query {
     return (await (Array.isArray(keys) ? Promise.all(details) : details[0])) as T
   }
 
+  /**
+   * Returns an async generator that yields resolved values as they come in
+   * for the specified key(s). Allows continuous streaming of query results.
+   *
+   * @param keys - A single key or an object mapping property names to keys.
+   * @yields The resolved value(s) each time a refetch completes.
+   */
   async function* stream<T = unknown>(keys: string | { [K in keyof T]: string }) {
     for (;;) {
       yield await next<T>(keys)
     }
   }
 
+  /**
+   * Returns the first occurrence of a specific event for a given key.
+   * Subscribes to the event and automatically unsubscribes after receiving it.
+   *
+   * @param key - The cache key to listen for events on.
+   * @param event - The type of event to wait for.
+   * @returns A promise that resolves with the event details.
+   */
   function once<T = unknown>(key: string, event: QueryEvent) {
     return new Promise<CustomEventInit<T>>(function (resolve) {
       const unsubscribe = subscribe<T>(key, event, function (event) {
@@ -516,6 +546,15 @@ export function createQuery(instanceOptions?: Configuration): Query {
     })
   }
 
+  /**
+   * Returns an async generator that yields event details each time the
+   * specified event occurs for a given key. Allows iteration over a
+   * continuous sequence of events.
+   *
+   * @param key - The cache key to listen for events on.
+   * @param event - The type of event to stream.
+   * @yields The event details each time the event occurs.
+   */
   async function* sequence<T = unknown>(key: string, event: QueryEvent) {
     for (;;) {
       yield await once<T>(key, event)

@@ -60,6 +60,6 @@ describe.concurrent('useQueryInstance', function () {
     })
 
     expect(err).toBeDefined()
-    expect(err).toEqual(new Error(ErrNoQueryInstanceFound))
+    expect(err).toBe(ErrNoQueryInstanceFound)
   })
 })
