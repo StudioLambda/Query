@@ -1,6 +1,6 @@
 {
   "name": "@studiolambda/query",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "Lightweight, isomorphic and framework agnostic asynchronous data management for modern UIs",
   "keywords": [
     "data-management",

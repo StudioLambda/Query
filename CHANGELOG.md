@@ -1,10 +1,16 @@
 # Changelog
 
+## [1.5.4] - 2026-03-23
+
+### ⚙️ Miscellaneous Tasks
+
+- *(docs)* Fix changelog
 ## [1.5.3] - 2026-03-23
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(ci)* Merge publish into release workflow
+- *(release)* V1.5.3
 ## [1.5.2] - 2026-03-23
 
 ### 📚 Documentation
