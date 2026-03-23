@@ -1,4 +1,4 @@
-import { useEffect, use, useState, useTransition } from 'react'
+import { useEffect, useEffectEvent, use, useState, useTransition } from 'react'
 import { type ContextValue } from 'query/react:context'
 import { type Options } from 'query:index'
 import { useQueryContext } from './useQueryContext'
@@ -74,7 +74,7 @@ export function useQueryBasic<T = unknown>(
     useQueryTransitionContext()
 
   const [isLocalPending, startLocalTransition] = useTransition()
-  const { query, expiration, subscribe } = useQueryInstance(options)
+  const { query, subscribe } = useQueryInstance(options)
   const ignoreTransitionContext = oIgnoreTransitionContext ?? cIgnoreTransitionContext ?? false
   const isPending = ignoreTransitionContext ? isLocalPending : (isContextPending ?? isLocalPending)
 
@@ -94,64 +94,64 @@ export function useQueryBasic<T = unknown>(
 
   const [data, setData] = useState<T>(use(promise))
 
+  const onResolved = useEffectEvent(function (event: CustomEventInit<T>) {
+    startTransition(function () {
+      setData(event.detail as T)
+    })
+  })
+
+  const onMutating = useEffectEvent(function (event: CustomEventInit<Promise<T>>) {
+    startTransition(async function () {
+      const value = await (event.detail as Promise<T>)
+
+      startTransition(function () {
+        setData(value)
+      })
+    })
+  })
+
+  const onMutated = useEffectEvent(function (event: CustomEventInit<T>) {
+    startTransition(function () {
+      setData(event.detail as T)
+    })
+  })
+
+  const onHydrated = useEffectEvent(function (event: CustomEventInit<T>) {
+    startTransition(function () {
+      setData(event.detail as T)
+    })
+  })
+
+  const onRefetching = useEffectEvent(function (event: CustomEventInit<Promise<T>>) {
+    startTransition(async function () {
+      const value = await (event.detail as Promise<T>)
+
+      startTransition(function () {
+        setData(value)
+      })
+    })
+  })
+
+  const onForgotten = useEffectEvent(function () {
+    if (clearOnForget) {
+      startTransition(async function () {
+        const data = await query<T>(key, {
+          expiration: oExpiration,
+          fetcher: oFetcher,
+          stale: oStale,
+          removeOnError: oRemoveOnError,
+          fresh: oFresh,
+        })
+
+        startTransition(function () {
+          setData(data)
+        })
+      })
+    }
+  })
+
   useEffect(
     function () {
-      function onResolved(event: CustomEventInit<T>) {
-        startTransition(function () {
-          setData(event.detail as T)
-        })
-      }
-
-      function onMutating(event: CustomEventInit<Promise<T>>) {
-        startTransition(async function () {
-          const value = await (event.detail as Promise<T>)
-
-          startTransition(function () {
-            setData(value)
-          })
-        })
-      }
-
-      function onMutated(event: CustomEventInit<T>) {
-        startTransition(function () {
-          setData(event.detail as T)
-        })
-      }
-
-      function onHydrated(event: CustomEventInit<T>) {
-        startTransition(function () {
-          setData(event.detail as T)
-        })
-      }
-
-      function onRefetching(event: CustomEventInit<Promise<T>>) {
-        startTransition(async function () {
-          const value = await (event.detail as Promise<T>)
-
-          startTransition(function () {
-            setData(value)
-          })
-        })
-      }
-
-      function onForgotten() {
-        if (clearOnForget) {
-          startTransition(async function () {
-            const data = await query<T>(key, {
-              expiration: oExpiration,
-              fetcher: oFetcher,
-              stale: oStale,
-              removeOnError: oRemoveOnError,
-              fresh: oFresh,
-            })
-
-            startTransition(function () {
-              setData(data)
-            })
-          })
-        }
-      }
-
       const unsubscribeResolved = subscribe(key, 'resolved', onResolved)
       const unsubscribeMutating = subscribe(key, 'mutating', onMutating)
       const unsubscribeMutated = subscribe(key, 'mutated', onMutated)
@@ -168,19 +168,7 @@ export function useQueryBasic<T = unknown>(
         unsubscribeForgotten()
       }
     },
-    [
-      query,
-      expiration,
-      subscribe,
-      key,
-      clearOnForget,
-      oExpiration,
-      oFetcher,
-      oStale,
-      oRemoveOnError,
-      oFresh,
-      startTransition,
-    ]
+    [key, subscribe]
   )
 
   return { data, isPending }

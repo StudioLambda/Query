@@ -51,7 +51,7 @@
     "build:only": "vite build",
     "build": "npm run build:only",
     "prebuild": "npm run format:check && npm run lint",
-    "lint": "oxlint --react-plugin --vitest-plugin",
+    "lint": "oxlint --deny-warnings",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "dev": "vitest",
@@ -82,8 +82,8 @@
     "vitest": "^4.1.0"
   },
   "peerDependencies": {
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "solid-js": "^1.9.0"
   },
   "peerDependenciesMeta": {
