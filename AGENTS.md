@@ -180,6 +180,18 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/) a
 
 **Important:** Use `chore` (not `fix` or `feat`) for CI, build, or tooling changes that don't affect the published library. For example, use `chore(ci): fix workflow` instead of `fix(ci): fix workflow`. Using `fix` or `feat` for CI-only changes will trigger an unnecessary version bump and release.
 
+## CI/CD
+
+The project uses a single GitHub Actions workflow (`main.yml`) with three jobs:
+
+1. **check** — lint, format check, tests
+2. **build** — verifies the build succeeds (depends on check)
+3. **release** — version bump, changelog, npm publish, GitHub Release (depends on build, only on push to main)
+
+The `build` job does not verify the build on PRs — only the `release` job builds before publishing. The separate `build` job exists as an early CI gate so build failures are caught before the release job runs. The release job builds again from scratch because GitHub Actions jobs don't share artifacts between runners.
+
+`npm publish` uses `--ignore-scripts` to avoid double-building (the release job already ran `build:only` before publishing, so `prepack` is unnecessary).
+
 ## Environment
 
 - Node.js 25+ (see `.nvmrc`)
