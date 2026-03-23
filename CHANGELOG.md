@@ -2,6 +2,12 @@
 
 ## [unreleased]
 
+### ⚙️ Miscellaneous Tasks
+
+- _(ci)_ Simplify git-cliff config and upgrade GitHub Actions to v5
+
+## [1.5.0] - 2026-03-23
+
 ### 🚀 Features
 
 - Improve tests
@@ -31,6 +37,7 @@
 - Migrate from eslint+prettier to oxlint+oxfmt
 - Bump version to 1.5.0
 - Update all dev dependencies to latest versions
+- _(release)_ V1.5.0
 
 ## [1.4.0] - 2025-10-26
 
