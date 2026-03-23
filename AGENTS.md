@@ -169,6 +169,17 @@ describe.concurrent('feature', function () {
 - `react-in-jsx-scope` rule disabled (using new JSX transform)
 - Use `// oxlint-disable-next-line` to disable rules inline
 
+## Commit Conventions
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) and git-cliff for automated changelog generation and version bumping.
+
+- `feat`: new functionality (triggers minor bump)
+- `fix`: bug fix in library code (triggers patch bump)
+- `docs`: documentation changes
+- `refactor`, `perf`, `style`, `test`: non-breaking improvements
+
+**Important:** Use `chore` (not `fix` or `feat`) for CI, build, or tooling changes that don't affect the published library. For example, use `chore(ci): fix workflow` instead of `fix(ci): fix workflow`. Using `fix` or `feat` for CI-only changes will trigger an unnecessary version bump and release.
+
 ## Environment
 
 - Node.js 25+ (see `.nvmrc`)
