@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased](https://github.com/StudioLambda/Query/compare/v1.4.0...HEAD)
+## [1.5.0](https://github.com/StudioLambda/Query/compare/v1.4.0...v1.5.0) - 2026-03-23
 
 ### Bug Fixes
 
@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - **tests**: Github actions reporter ([663d5a1](https://github.com/StudioLambda/Query/commit/663d5a1ff0cb0a423e75edb516527f7ac5922cb6))
 - Add agent skill and improve readonly type safety ([341a4ac](https://github.com/StudioLambda/Query/commit/341a4aca79a66215a9d98bc74d283160aa65690f))
 - **react**: Use useEffectEvent for effect event handlers ([c650fbb](https://github.com/StudioLambda/Query/commit/c650fbb0becf0d1c34cb93b58cf296b9de2770b2))
+- **ci**: Add automated releases with git-cliff and npm trusted publishing ([5cea678](https://github.com/StudioLambda/Query/commit/5cea678958550248aca96ab43dc0a3633291eb09))
 
 ### Miscellaneous
 
