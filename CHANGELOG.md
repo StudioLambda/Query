@@ -1,10 +1,16 @@
 # Changelog
 
+## [1.5.6] - 2026-03-23
+
+### ⚙️ Miscellaneous Tasks
+
+- *(ci)* Skip prepack during npm publish to avoid double build
 ## [1.5.5] - 2026-03-23
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(ci)* Merge CI and release into a single workflow
+- *(release)* V1.5.5
 ## [1.5.4] - 2026-03-23
 
 ### ⚙️ Miscellaneous Tasks
