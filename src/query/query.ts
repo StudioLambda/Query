@@ -407,15 +407,9 @@ export function createQuery(instanceOptions?: Configuration): Query {
       resolversCache.set(key, { item: result, controller })
       emit(key, 'refetching', result)
 
-      trigger = trigger as TriggerFunction
-
-      while (trigger === undefined) {
-        // This ensures that the trigger
-        // has been defined, as it is defined
-        // inside the promise.
-      }
-
-      void trigger()
+      // The promise executor runs synchronously,
+      // so trigger is guaranteed to be defined here.
+      void trigger!()
 
       return result
     }

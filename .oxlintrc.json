@@ -6,6 +6,7 @@
     "suspicious": "warn"
   },
   "rules": {
+    "no-shadow": "off",
     "react-in-jsx-scope": "off"
   },
   "settings": {
