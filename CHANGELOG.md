@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.2] - 2026-03-23
+
+### 📚 Documentation
+
+- Document commit type conventions for CI changes
 ## [1.5.1] - 2026-03-23
 
 ### 🐛 Bug Fixes
@@ -9,6 +14,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - *(ci)* Simplify git-cliff config and upgrade GitHub Actions to v5
+- *(release)* V1.5.1
 ## [1.5.0] - 2026-03-23
 
 ### 🚀 Features
