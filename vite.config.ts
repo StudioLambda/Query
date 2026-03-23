@@ -1,7 +1,8 @@
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import dts from 'vite-plugin-dts'
-import react from '@vitejs/plugin-react'
+import react, { reactCompilerPreset } from '@vitejs/plugin-react'
+import babel from '@rolldown/plugin-babel'
 // import solid from 'vite-plugin-solid'
 
 export default defineConfig({
@@ -21,9 +22,6 @@ export default defineConfig({
       // },
     ],
   },
-  esbuild: {
-    keepNames: true,
-  },
   build: {
     sourcemap: true,
     lib: {
@@ -34,16 +32,20 @@ export default defineConfig({
       },
       formats: ['es', 'cjs'],
     },
-    rollupOptions: {
+    rolldownOptions: {
       external: ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', 'solid-js'],
+      output: {
+        keepNames: true,
+      },
     },
   },
   plugins: [
     react({
       include: ['src/react/**/*.tsx'],
-      babel: {
-        plugins: [['babel-plugin-react-compiler']],
-      },
+    }),
+    babel({
+      include: ['src/react/**/*.tsx'],
+      presets: [reactCompilerPreset()],
     }),
     // solid({
     //   include: ['src/solid/**/*.tsx'],
