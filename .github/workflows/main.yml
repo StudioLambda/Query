@@ -134,7 +134,7 @@ jobs:
 
       - name: Publish to npm
         if: steps.version.outputs.bump == 'true'
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --ignore-scripts
 
       - name: Generate release notes
         if: steps.version.outputs.bump == 'true'
