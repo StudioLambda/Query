@@ -182,7 +182,7 @@ export type MutateFunction = {
  * The hydrate function type.
  */
 export type HydrateFunction = {
-  <T = unknown>(keys: string | string[], item: T, options?: HydrateOptions<T>): void
+  <T = unknown>(keys: string | readonly string[], item: T, options?: HydrateOptions<T>): void
 }
 
 /**
@@ -235,7 +235,7 @@ export type ConfigureFunction = {
  * resolvers, specific keys, or provide a custom abort reason.
  */
 export type AbortFunction = {
-  (key?: string | string[], reason?: unknown): void
+  (key?: string | readonly string[], reason?: unknown): void
 }
 
 /**
@@ -251,7 +251,7 @@ export type SnapshotFunction = {
  * cache (items or resolvers).
  */
 export type KeysFunction = {
-  (cache?: CacheType): string[]
+  (cache?: CacheType): readonly string[]
 }
 
 /**
@@ -267,7 +267,7 @@ export type ExpirationFunction = {
  * multiple keys, or keys matching a regular expression pattern.
  */
 export type ForgetFunction = {
-  (keys?: string | string[] | RegExp): Promise<void>
+  (keys?: string | readonly string[] | RegExp): Promise<void>
 }
 
 /**

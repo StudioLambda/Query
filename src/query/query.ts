@@ -221,7 +221,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
   /**
    * Determines if the given key is currently resolving.
    */
-  function keys(type: CacheType = 'items'): string[] {
+  function keys(type: CacheType = 'items'): readonly string[] {
     return Array.from(type === 'items' ? itemsCache.keys() : resolversCache.keys())
   }
 
@@ -232,7 +232,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * `AbortSignal` to cancel the job.
    * If no keys are provided, all resolvers are aborted.
    */
-  function abort(cacheKeys?: string | string[], reason?: unknown): void {
+  function abort(cacheKeys?: string | readonly string[], reason?: unknown): void {
     const resolverKeys =
       typeof cacheKeys === 'string' ? [cacheKeys] : (cacheKeys ?? keys('resolvers'))
 
@@ -253,8 +253,8 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * Does not remove any resolvers.
    * If no keys are provided the items cache is cleared.
    */
-  async function forget(cacheKeys?: string | string[] | RegExp): Promise<void> {
-    let itemKeys: string[]
+  async function forget(cacheKeys?: string | readonly string[] | RegExp): Promise<void> {
+    let itemKeys: readonly string[]
 
     if (typeof cacheKeys === 'string') {
       itemKeys = [cacheKeys]
@@ -284,7 +284,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * know what you are doing.
    */
   function hydrate<T = unknown>(
-    keys: string | string[],
+    keys: string | readonly string[],
     item: T,
     options?: HydrateOptions<T>
   ): void {
@@ -508,7 +508,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * @returns A promise that resolves with the fetched value(s).
    */
   async function next<T = unknown>(keys: string | { [K in keyof T]: string }): Promise<T> {
-    const iterator = (Array.isArray(keys) ? keys : [keys]) as string[]
+    const iterator = (Array.isArray(keys) ? keys : [keys]) as readonly string[]
     const promises = iterator.map((key) => once(key, 'refetching'))
     const events = await Promise.all(promises)
     const details = events.map((event) => event.detail as Promise<T>)

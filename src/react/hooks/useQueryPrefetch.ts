@@ -15,7 +15,7 @@ import { type QueryInstance, useQueryInstance } from './useQueryInstance'
  * useQueryPrefetch(['/api/user/1', '/api/user/2', '/api/user/3'])
  * ```
  */
-export function useQueryPrefetch(keys: string[], options?: QueryInstance) {
+export function useQueryPrefetch(keys: readonly string[], options?: QueryInstance) {
   const { query } = useQueryInstance(options)
 
   useEffect(

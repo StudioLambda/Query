@@ -10,7 +10,7 @@ export interface QueryPrefetchProps extends QueryInstance {
   /**
    * An array of cache keys to prefetch when the component mounts.
    */
-  keys: string[]
+  keys: readonly string[]
 
   /**
    * The child elements to render after initiating the prefetch.
