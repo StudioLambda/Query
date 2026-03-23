@@ -47,6 +47,9 @@
       "require": "./dist/query_react.cjs"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build:only": "vite build",
     "build": "npm run build:only",
@@ -109,8 +112,5 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }
