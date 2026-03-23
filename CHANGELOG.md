@@ -1,10 +1,19 @@
 # Changelog
 
+## [1.5.3] - 2026-03-23
+
+### ⚙️ Miscellaneous Tasks
+
+- *(ci)* Merge publish into release workflow
 ## [1.5.2] - 2026-03-23
 
 ### 📚 Documentation
 
 - Document commit type conventions for CI changes
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V1.5.2
 ## [1.5.1] - 2026-03-23
 
 ### 🐛 Bug Fixes
