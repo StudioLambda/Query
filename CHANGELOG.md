@@ -1,10 +1,16 @@
 # Changelog
 
+## [1.5.7] - 2026-03-23
+
+### 📚 Documentation
+
+- Document CI/CD workflow structure and rationale
 ## [1.5.6] - 2026-03-23
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(ci)* Skip prepack during npm publish to avoid double build
+- *(release)* V1.5.6
 ## [1.5.5] - 2026-03-23
 
 ### ⚙️ Miscellaneous Tasks
