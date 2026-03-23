@@ -10,6 +10,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+  id-token: write
+
 jobs:
   check:
     name: Lint, Format & Test
@@ -61,3 +65,83 @@ jobs:
 
       - name: Build
         run: npm run build:only
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [build]
+
+    # Only release on push to main, not on PRs
+    if: ${{ github.event_name == 'push' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install git-cliff
+        uses: kenji-miyake/setup-git-cliff@v2
+
+      - name: Determine next version
+        id: version
+        run: |
+          NEXT=$(git-cliff --bumped-version 2>/dev/null)
+          CURRENT=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ "$NEXT" = "$CURRENT" ]; then
+            echo "No version bump needed"
+            echo "bump=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Next version: $NEXT"
+            echo "bump=true" >> "$GITHUB_OUTPUT"
+            echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        if: steps.version.outputs.bump == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        if: steps.version.outputs.bump == 'true'
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Build
+        if: steps.version.outputs.bump == 'true'
+        run: npm run build:only
+
+      - name: Bump package.json version
+        if: steps.version.outputs.bump == 'true'
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
+
+      - name: Generate changelog
+        if: steps.version.outputs.bump == 'true'
+        run: git-cliff --tag "${{ steps.version.outputs.version }}" -o CHANGELOG.md
+
+      - name: Commit and tag
+        if: steps.version.outputs.bump == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json CHANGELOG.md
+          git commit -m "chore(release): ${{ steps.version.outputs.version }}"
+          git tag -a "${{ steps.version.outputs.version }}" -m "${{ steps.version.outputs.version }}"
+          git push origin main --follow-tags
+
+      - name: Publish to npm
+        if: steps.version.outputs.bump == 'true'
+        run: npm publish --provenance --access public
+
+      - name: Generate release notes
+        if: steps.version.outputs.bump == 'true'
+        run: git-cliff --latest --strip header > RELEASE_NOTES.md
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.bump == 'true'
+        run: gh release create "${{ steps.version.outputs.version }}" --title "${{ steps.version.outputs.version }}" --notes-file RELEASE_NOTES.md
+        env:
+          GH_TOKEN: ${{ github.token }}
