@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    branches: ['main']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+
+    # Skip release commits to avoid infinite loops
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install git-cliff
+        uses: kenji-miyake/setup-git-cliff@v2
+
+      - name: Determine next version
+        id: version
+        run: |
+          NEXT=$(git-cliff --bumped-version 2>/dev/null)
+          CURRENT=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ "$NEXT" = "$CURRENT" ]; then
+            echo "No version bump needed"
+            echo "bump=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Next version: $NEXT"
+            echo "bump=true" >> "$GITHUB_OUTPUT"
+            echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        if: steps.version.outputs.bump == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Bump package.json version
+        if: steps.version.outputs.bump == 'true'
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
+
+      - name: Generate changelog
+        if: steps.version.outputs.bump == 'true'
+        run: git-cliff --tag "${{ steps.version.outputs.version }}" -o CHANGELOG.md
+
+      - name: Commit and tag
+        if: steps.version.outputs.bump == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json CHANGELOG.md
+          git commit -m "chore(release): ${{ steps.version.outputs.version }}"
+          git tag "${{ steps.version.outputs.version }}"
+          git push origin main --follow-tags
