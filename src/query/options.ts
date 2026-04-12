@@ -195,7 +195,7 @@ export type Unsubscriber = () => void
  * Subscribes to the event and automatically unsubscribes after receiving it.
  */
 export type OnceFunction = {
-  <T = unknown>(key: string, event: QueryEvent): Promise<CustomEventInit<T>>
+  <T = unknown>(key: string, event: QueryEvent, signal?: AbortSignal): Promise<CustomEventInit<T>>
 }
 
 /**

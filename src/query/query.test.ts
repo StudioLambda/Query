@@ -805,8 +805,8 @@ describe.concurrent('query', function () {
 
     const { items, resolvers } = caches()
 
-    expect(items).toBe(items)
-    expect(resolvers).toBe(resolvers)
+    expect(items).toBe(itemsCache)
+    expect(resolvers).toBe(resolversCache)
   })
 
   it('respects fresh option from configure()', async ({ expect }) => {
