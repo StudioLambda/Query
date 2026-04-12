@@ -92,7 +92,16 @@ export function useQueryBasic<T = unknown>(
     fresh: oFresh,
   })
 
-  const [data, setData] = useState<T>(use(promise))
+  const resolved = use(promise)
+  const [data, setData] = useState<T>(resolved)
+
+  // Sync state when the resolved value changes (e.g. on key change).
+  // useState only captures the initial value, so when the key changes
+  // and the new data is already cached, use() returns new data but
+  // useState ignores it. This comparison detects that drift and resets.
+  if (data !== resolved) {
+    setData(resolved)
+  }
 
   const onResolved = useEffectEvent(function (event: CustomEventInit<T>) {
     startTransition(function () {

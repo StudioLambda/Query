@@ -808,4 +808,74 @@ describe.concurrent('query', function () {
     expect(items).toBe(items)
     expect(resolvers).toBe(resolvers)
   })
+
+  it('respects fresh option from configure()', async ({ expect }) => {
+    let times = 0
+
+    function fetcher() {
+      times++
+      return Promise.resolve('value')
+    }
+
+    const { query, configure } = createQuery({ fetcher, expiration: () => 10000 })
+
+    await query('key')
+    expect(times).toBe(1)
+
+    configure({ fresh: true })
+
+    await query('key')
+    expect(times).toBe(2)
+  })
+
+  it('fresh option aborts in-flight request and starts new fetch', async ({ expect }) => {
+    let fetchCount = 0
+
+    function fetcher() {
+      fetchCount++
+      return Promise.resolve('value-' + fetchCount)
+    }
+
+    const { query } = createQuery({ fetcher, expiration: () => 10000 })
+
+    await query('key')
+    expect(fetchCount).toBe(1)
+
+    const result = await query('key', { fresh: true })
+    expect(fetchCount).toBe(2)
+    expect(result).toBe('value-2')
+  })
+
+  it('can use next() with object keys', async ({ expect }) => {
+    function fetcher(key: string) {
+      return Promise.resolve(key)
+    }
+
+    const { query, next } = createQuery({ fetcher })
+
+    const promise = next<{ a: string; b: string }>({ a: '/foo', b: '/bar' })
+
+    await Promise.all([query('/foo'), query('/bar')])
+
+    const result = await promise
+
+    expect(result.a).toBe('/foo')
+    expect(result.b).toBe('/bar')
+  })
+
+  it('can use next() with a single string key', async ({ expect }) => {
+    function fetcher(key: string) {
+      return Promise.resolve(key)
+    }
+
+    const { query, next } = createQuery({ fetcher })
+
+    const promise = next<string>('/foo')
+
+    await query('/foo')
+
+    const result = await promise
+
+    expect(result).toBe('/foo')
+  })
 })

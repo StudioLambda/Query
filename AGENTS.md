@@ -169,6 +169,25 @@ describe.concurrent('feature', function () {
 - `react-in-jsx-scope` rule disabled (using new JSX transform)
 - Use `// oxlint-disable-next-line` to disable rules inline
 
+## React Compiler
+
+This project uses [React Compiler](https://react.dev/learn/react-compiler) (`babel-plugin-react-compiler` v1.0.0+) to automatically optimize React components at build time.
+
+### Build Configuration
+
+- Runs via `@rolldown/plugin-babel` with `reactCompilerPreset()` exported from `@vitejs/plugin-react`
+- Applied only to `src/react/**/*.tsx` files
+- Plugin order in `vite.config.ts`: `react()` (JSX transform) then `babel()` (compiler) — this is the [officially recommended order](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md#react-compiler)
+- Peer dependencies: `@babel/core`, `@rolldown/plugin-babel`, `babel-plugin-react-compiler`
+
+### Rules for React Code
+
+- **Do NOT** use `useMemo`, `useCallback`, or `React.memo` — the compiler handles memoization automatically
+- **Do NOT** mutate props, state, or values returned from hooks — the compiler assumes immutability
+- All React code must strictly follow the [Rules of React](https://react.dev/reference/rules)
+- `useEffectEvent` is used for stable event handler references that should not be listed as effect dependencies
+- Prefer `function` declarations for components (not arrow functions assigned to variables)
+
 ## Commit Conventions
 
 This project uses [Conventional Commits](https://www.conventionalcommits.org/) and git-cliff for automated changelog generation and version bumping.
