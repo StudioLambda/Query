@@ -9,17 +9,17 @@ export interface QueryTransitionProps {
   /**
    * Indicates whether a transition is currently pending.
    */
-  isPending: boolean
+  readonly isPending: boolean
 
   /**
    * The function to start a transition, typically from useTransition.
    */
-  startTransition: TransitionStartFunction
+  readonly startTransition: TransitionStartFunction
 
   /**
    * The child elements that will have access to the transition context.
    */
-  children?: ReactNode
+  readonly children?: ReactNode
 }
 
 /**

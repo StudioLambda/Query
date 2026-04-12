@@ -32,7 +32,7 @@ export interface Configuration extends Options {
    *
    * By default it does not use any broadcast channel.
    * If a broadcast channel is provided, query
-   * won't close automatically, therefore, the responsability
+   * won't close automatically, therefore, the responsibility
    * of closing the broadcast channel is up to the user.
    */
   readonly broadcast?: BroadcastChannel
@@ -107,7 +107,7 @@ export interface BroadcastPayload {
   /**
    * The event name.
    */
-  readonly event: QueryEvent
+  readonly event: `${QueryEvent}:${string}`
 
   /**
    * The event detail.
@@ -150,14 +150,14 @@ export type FetcherFunction<T = unknown> = {
 }
 
 /**
- * The mutate function options.
+ * The hydrate function options.
  */
 export interface HydrateOptions<T = unknown> {
   /**
    * Custom expiration function for the hydrated item, overriding
    * the default expiration configuration.
    */
-  expiration?: ExpirationOptionFunction<T>
+  readonly expiration?: ExpirationOptionFunction<T>
 }
 
 /**
@@ -168,7 +168,7 @@ export interface MutateOptions<T = unknown> {
    * Custom expiration function for the mutated item, overriding
    * the default expiration configuration.
    */
-  expiration?: ExpirationOptionFunction<T>
+  readonly expiration?: ExpirationOptionFunction<T>
 }
 
 /**
@@ -211,7 +211,7 @@ export type SequenceFunction = {
  * for one or more keys after a refetching event occurs.
  */
 export type NextFunction = {
-  <T = unknown>(keys: string | { [K in keyof T]: string }): Promise<T>
+  <T = unknown>(keys: string | { [K in keyof T]: string }, signal?: AbortSignal): Promise<T>
 }
 
 /**
@@ -227,7 +227,7 @@ export type StreamFunction = {
  * Allows partial updates to the configuration options.
  */
 export type ConfigureFunction = {
-  (options?: Partial<Configuration>): void
+  (options?: Configuration): void
 }
 
 /**
@@ -289,7 +289,7 @@ export interface Query {
   /**
    * Emit is able to send events to active subscribers
    * with the given payload. It is a low level API
-   * and should be used with case.
+   * and should be used with care.
    */
   readonly emit: EmitFunction
 
@@ -311,7 +311,7 @@ export interface Query {
   /**
    * Mutates the key with a given optimistic value.
    * The mutated value is considered expired and will be
-   * replaced immediatly if a refetch happens.
+   * replaced immediately if a refetch happens.
    */
   readonly mutate: MutateFunction
 
@@ -324,8 +324,8 @@ export interface Query {
   readonly abort: AbortFunction
 
   /**
-   * Forgets the given keys from the cache.
-   * Removes items from both, the cache and resolvers.
+   * Forgets the given keys from the items cache.
+   * Does not remove any resolvers.
    */
   readonly forget: ForgetFunction
 

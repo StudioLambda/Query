@@ -22,7 +22,7 @@ describe.concurrent('useQuery', function () {
     const container = document.createElement('div')
     const promise = query.next<string>('/user')
 
-    // eslint-disable-next-line
+    // oxlint-disable-next-line
     await act(async function () {
       createRoot(container).render(
         <Suspense fallback="loading">

@@ -27,7 +27,7 @@ describe.concurrent('QueryProvider', function () {
     const query = createQuery({ fetcher })
     const promise = query.once('/user', 'refetching')
 
-    // eslint-disable-next-line
+    // oxlint-disable-next-line
     await act(async function () {
       createRoot(container).render(
         <QueryProvider query={query}>

@@ -22,7 +22,8 @@ import {
 } from 'query:options'
 
 /**
- * Stores the default fetcher function.
+ * Creates a default fetcher function that performs JSON requests
+ * using the provided fetch implementation.
  */
 export function defaultFetcher<T>(
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
@@ -70,7 +71,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
    *
    * By default it does not use any broadcast channel.
    * If a broadcast channel is provided, query
-   * won't close automatically, therefore, the responsability
+   * won't close automatically, therefore, the responsibility
    * of closing the broadcast channel is up to the user.
    */
   let broadcast = instanceOptions?.broadcast
@@ -153,7 +154,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * does have a payload parameter that will contain relevant
    * information depending on the event type.
    * If there's a pending resolver for that key, the `refetching`
-   * event is fired immediatly.
+   * event is fired immediately.
    */
   function subscribe<T = unknown>(
     key: string,
@@ -163,7 +164,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
     events.addEventListener(`${event}:${key}`, listener)
     const value = resolversCache.get(key)
 
-    // For the refetching event, we want to immediatly return if there's
+    // For the refetching event, we want to immediately return if there's
     // a pending resolver.
     if (event === 'refetching' && value !== undefined) {
       emit(key, event, value.item)
@@ -177,7 +178,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
   /**
    * Mutates the key with a given optimistic value.
    * The mutated value is considered expired and will be
-   * replaced immediatly if a refetch happens when expired
+   * replaced immediately if a refetch happens when expired
    * is true. If expired is false, the value expiration time
    * is added as if it was a valid data refetched. Alternatively
    * you can provide a Date to decide when the expiration happens.
@@ -224,7 +225,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
   }
 
   /**
-   * Determines if the given key is currently resolving.
+   * Returns all keys currently stored in the specified cache.
    */
   function keys(type: CacheType = 'items'): readonly string[] {
     return Array.from(type === 'items' ? itemsCache.keys() : resolversCache.keys())
@@ -335,7 +336,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
     const fetcher = (options?.fetcher ?? instanceFetcher) as FetcherFunction<T>
 
     /**
-     * Determines if we can return a sale item
+     * Determines if we can return a stale item.
      * If true, it will return the previous stale item
      * stored in the cache if it has expired. It will attempt
      * to revalidate it in the background. If false, the returned
@@ -384,7 +385,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
             // before we write to the cache, bail out to avoid writing
             // stale data that contradicts the abort.
             if (controller.signal.aborted) {
-              reject(controller.signal.reason as Error)
+              reject(controller.signal.reason)
               return
             }
 
@@ -418,7 +419,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
             emit(key, 'error', error)
 
             // Throw back the error.
-            reject(error as Error)
+            reject(error)
           }
         }
       })
@@ -461,13 +462,13 @@ export function createQuery(instanceOptions?: Configuration): Query {
     // in the background.
     if (hasExpired && stale) {
       // We have to silence the error to avoid unhandled promises.
-      // Refer to the error event if you need full controll of errors.
+      // Refer to the error event if you need full control of errors.
       refetch(key).catch(() => {})
 
       return cached.item as Promise<T>
     }
 
-    // The item has expired but we dont allow stale
+    // The item has expired but we don't allow stale
     // responses so we need to wait for the revalidation.
     if (hasExpired) {
       return refetch(key)
