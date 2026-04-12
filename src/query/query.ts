@@ -342,7 +342,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
      * Determines if the result should be a fresh fetched
      * instance regardless of any cached value or its expiration time.
      */
-    const fresh = options?.fresh ?? instanceOptions?.fresh
+    const fresh = options?.fresh ?? instanceFresh
 
     // Force fetching of the data.
     function refetch(key: string): Promise<T> {
@@ -415,8 +415,11 @@ export function createQuery(instanceOptions?: Configuration): Query {
     }
 
     // We want to force a fresh item ignoring any current cached
-    // value or its expiration time.
+    // value or its expiration time. Abort any existing in-flight
+    // request so that refetch starts a genuinely new fetch instead
+    // of returning the pending deduplication promise.
     if (fresh) {
+      abort(key)
       return refetch(key)
     }
 
@@ -498,16 +501,33 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * Waits for the next refetching event on one or more keys and returns
    * the resolved values. Useful for synchronizing with query updates.
    *
-   * @param keys - A single key or an object mapping property names to keys.
+   * Supports a single key (returns a single value), an array of keys
+   * (returns an array of values), or an object mapping property names
+   * to keys (returns an object with the same shape).
+   *
+   * @param keys - A single key, array of keys, or object mapping names to keys.
    * @returns A promise that resolves with the fetched value(s).
    */
   async function next<T = unknown>(keys: string | { [K in keyof T]: string }): Promise<T> {
-    const iterator = (Array.isArray(keys) ? keys : [keys]) as readonly string[]
-    const promises = iterator.map((key) => once(key, 'refetching'))
-    const events = await Promise.all(promises)
-    const details = events.map((event) => event.detail as Promise<T>)
+    if (typeof keys === 'string') {
+      const event = await once(keys, 'refetching')
+      return (await (event.detail as Promise<T>)) as T
+    }
 
-    return (await (Array.isArray(keys) ? Promise.all(details) : details[0])) as T
+    if (Array.isArray(keys)) {
+      const promises = keys.map((key) => once(key, 'refetching'))
+      const events = await Promise.all(promises)
+      const details = events.map((event) => event.detail as Promise<T>)
+      return (await Promise.all(details)) as T
+    }
+
+    const objectKeys = keys as Record<string, string>
+    const entries = Object.entries(objectKeys)
+    const promises = entries.map(([, key]) => once(key, 'refetching'))
+    const events = await Promise.all(promises)
+    const details = await Promise.all(events.map((event) => event.detail as Promise<unknown>))
+    const result = Object.fromEntries(entries.map(([name], i) => [name, details[i]]))
+    return result as T
   }
 
   /**

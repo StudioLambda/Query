@@ -90,7 +90,7 @@ export function useQueryActions<T = unknown>(
     })
   }
 
-  function localMutate<T = unknown>(value: MutationValue<T>, options?: MutateOptions<T>) {
+  function localMutate(value: MutationValue<T>, options?: MutateOptions<T>) {
     return mutate(key, value, options)
   }
 
