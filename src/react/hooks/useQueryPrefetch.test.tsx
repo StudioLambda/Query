@@ -23,7 +23,7 @@ describe.concurrent('useQueryPrefetch', function () {
 
     const promise = query.next<[string, string]>(['/user', '/config'])
 
-    // eslint-disable-next-line
+    // oxlint-disable-next-line
     await act(async function () {
       createRoot(container).render(
         <Suspense fallback="loading">

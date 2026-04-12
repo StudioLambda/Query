@@ -741,7 +741,7 @@ describe.concurrent('query', function () {
     const event = await promise
 
     expect(event).toBeDefined()
-    expect(event).toBeDefined()
+    expect(event.detail).toBe('works')
   })
 
   it('uses the same promises for the same result', ({ expect, signal }) => {
