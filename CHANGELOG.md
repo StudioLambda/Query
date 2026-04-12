@@ -1,10 +1,19 @@
 # Changelog
 
+## [1.5.8] - 2026-04-12
+
+### 🐛 Bug Fixes
+
+- Resolve high-severity audit issues in core query and React bindings
 ## [1.5.7] - 2026-03-23
 
 ### 📚 Documentation
 
 - Document CI/CD workflow structure and rationale
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V1.5.7
 ## [1.5.6] - 2026-03-23
 
 ### ⚙️ Miscellaneous Tasks
