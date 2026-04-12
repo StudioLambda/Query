@@ -139,7 +139,12 @@ export function createQuery(instanceOptions?: Configuration): Query {
       case 'resolved':
       case 'hydrated':
       case 'forgotten':
-        broadcast?.postMessage({ event: `${event}:${key}`, detail })
+        try {
+          broadcast?.postMessage({ event: `${event}:${key}`, detail })
+        } catch {
+          // Silently ignore DataCloneError or other postMessage failures
+          // (e.g. when the detail is not structurally cloneable).
+        }
     }
   }
 
@@ -271,7 +276,14 @@ export function createQuery(instanceOptions?: Configuration): Query {
 
       if (item !== undefined) {
         itemsCache.delete(key)
-        emit(key, 'forgotten', await item.item)
+
+        // Wrap in try-catch so that rejected or pending-then-rejected
+        // promises don't prevent the rest of the keys from being forgotten.
+        try {
+          emit(key, 'forgotten', await item.item)
+        } catch {
+          emit(key, 'forgotten', undefined)
+        }
       }
     }
   }
@@ -367,6 +379,14 @@ export function createQuery(instanceOptions?: Configuration): Query {
 
             // Awaits the fetching to get the result item.
             const item = await result
+
+            // If the signal was aborted after the fetch resolved but
+            // before we write to the cache, bail out to avoid writing
+            // stale data that contradicts the abort.
+            if (controller.signal.aborted) {
+              reject(controller.signal.reason as Error)
+              return
+            }
 
             const promise =
               (resolversCache.get(key)?.item as Promise<T> | undefined) ?? Promise.resolve(item)
@@ -486,14 +506,19 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * context.
    */
   function subscribeBroadcast(): Unsubscriber {
+    // Capture the current broadcast reference so that the unsubscriber
+    // always targets the same channel that was subscribed to, even if
+    // configure() replaces the broadcast channel later.
+    const currentBroadcast = broadcast
+
     function onBroadcastMessage(message: MessageEvent<BroadcastPayload>) {
       events.dispatchEvent(new CustomEvent(message.data.event, { detail: message.data.detail }))
     }
 
-    broadcast?.addEventListener('message', onBroadcastMessage)
+    currentBroadcast?.addEventListener('message', onBroadcastMessage)
 
     return function () {
-      broadcast?.removeEventListener('message', onBroadcastMessage)
+      currentBroadcast?.removeEventListener('message', onBroadcastMessage)
     }
   }
 
@@ -508,14 +533,17 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * @param keys - A single key, array of keys, or object mapping names to keys.
    * @returns A promise that resolves with the fetched value(s).
    */
-  async function next<T = unknown>(keys: string | { [K in keyof T]: string }): Promise<T> {
+  async function next<T = unknown>(
+    keys: string | { [K in keyof T]: string },
+    signal?: AbortSignal
+  ): Promise<T> {
     if (typeof keys === 'string') {
-      const event = await once(keys, 'refetching')
+      const event = await once(keys, 'refetching', signal)
       return (await (event.detail as Promise<T>)) as T
     }
 
     if (Array.isArray(keys)) {
-      const promises = keys.map((key) => once(key, 'refetching'))
+      const promises = keys.map((key) => once(key, 'refetching', signal))
       const events = await Promise.all(promises)
       const details = events.map((event) => event.detail as Promise<T>)
       return (await Promise.all(details)) as T
@@ -523,7 +551,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
 
     const objectKeys = keys as Record<string, string>
     const entries = Object.entries(objectKeys)
-    const promises = entries.map(([, key]) => once(key, 'refetching'))
+    const promises = entries.map(([, key]) => once(key, 'refetching', signal))
     const events = await Promise.all(promises)
     const details = await Promise.all(events.map((event) => event.detail as Promise<unknown>))
     const result = Object.fromEntries(entries.map(([name], i) => [name, details[i]]))
@@ -538,8 +566,14 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * @yields The resolved value(s) each time a refetch completes.
    */
   async function* stream<T = unknown>(keys: string | { [K in keyof T]: string }) {
-    for (;;) {
-      yield await next<T>(keys)
+    const controller = new AbortController()
+
+    try {
+      for (;;) {
+        yield await next<T>(keys, controller.signal)
+      }
+    } finally {
+      controller.abort()
     }
   }
 
@@ -551,12 +585,29 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * @param event - The type of event to wait for.
    * @returns A promise that resolves with the event details.
    */
-  function once<T = unknown>(key: string, event: QueryEvent) {
-    return new Promise<CustomEventInit<T>>(function (resolve) {
+  function once<T = unknown>(key: string, event: QueryEvent, signal?: AbortSignal) {
+    return new Promise<CustomEventInit<T>>(function (resolve, reject) {
       const unsubscribe = subscribe<T>(key, event, function (event) {
         resolve(event)
-        unsubscribe()
+        cleanup()
       })
+
+      function cleanup() {
+        unsubscribe()
+        signal?.removeEventListener('abort', onAbort)
+      }
+
+      function onAbort() {
+        cleanup()
+        reject(signal!.reason)
+      }
+
+      signal?.addEventListener('abort', onAbort)
+
+      // If the signal is already aborted, clean up immediately.
+      if (signal?.aborted) {
+        onAbort()
+      }
     })
   }
 
@@ -570,8 +621,14 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * @yields The event details each time the event occurs.
    */
   async function* sequence<T = unknown>(key: string, event: QueryEvent) {
-    for (;;) {
-      yield await once<T>(key, event)
+    const controller = new AbortController()
+
+    try {
+      for (;;) {
+        yield await once<T>(key, event, controller.signal)
+      }
+    } finally {
+      controller.abort()
     }
   }
 

@@ -46,6 +46,12 @@ export function QueryProvider({
 
   useEffect(
     function () {
+      // Guard against environments where BroadcastChannel is unavailable
+      // (e.g. certain edge runtimes or older server-side environments).
+      if (typeof BroadcastChannel === 'undefined') {
+        return
+      }
+
       const broadcast = new BroadcastChannel('query')
 
       localQuery.configure({ broadcast })
