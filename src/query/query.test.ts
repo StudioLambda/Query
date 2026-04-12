@@ -692,7 +692,7 @@ describe.concurrent('query', function () {
   })
 
   it('can use the default fetcher', async ({ expect }) => {
-    const mockedFetch = vi.fn(fetch)
+    const mockedFetch = vi.fn<typeof fetch>(fetch)
 
     mockedFetch.mockReturnValueOnce(
       Promise.resolve(new Response(JSON.stringify({ data: 'example' })))
@@ -706,7 +706,7 @@ describe.concurrent('query', function () {
   })
 
   it('can use the default fetcher when fails', async ({ expect }) => {
-    const mockedFetch = vi.fn(fetch)
+    const mockedFetch = vi.fn<typeof fetch>(fetch)
 
     mockedFetch.mockReturnValueOnce(Promise.resolve(new Response(undefined, { status: 500 })))
 
