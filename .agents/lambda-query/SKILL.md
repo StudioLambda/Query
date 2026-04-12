@@ -1,15 +1,13 @@
 ---
-name: studiolambda-query
+name: lambda-query
 description: >
   Skill for using @studiolambda/query, a lightweight isomorphic SWR-style async data
   management library. Use when writing, editing, reviewing, or testing code that uses
   createQuery, useQuery, QueryProvider, cache mutations, hydration, event subscriptions,
   or any @studiolambda/query API. Covers the core framework-agnostic library and
   React 19+ bindings (hooks and components).
-license: MIT
-compatibility: Requires Node.js 18+. React bindings require React 19.1+.
 metadata:
-  version: "1.4.0"
+  version: "1.5.9"
   author: studiolambda
 ---
 
@@ -96,6 +94,8 @@ await query.forget(/^\/api\/users(.*)/)            // Regex pattern
 await query.forget()                               // All keys
 ```
 
+**Note:** `forget` only removes items from the items cache -- it does not cancel pending resolvers. Use `abort` to cancel in-flight requests. If a cached promise has rejected, `forget` handles it gracefully (emits `'forgotten'` with `undefined`).
+
 ### Hydrate (pre-populate cache)
 
 ```typescript
@@ -112,12 +112,14 @@ query.abort()                         // Abort all pending
 query.abort('/api/user', 'cancelled') // With custom reason
 ```
 
+**Note:** When `fresh: true` is used, `abort(key)` is called before `refetch(key)` to ensure a genuinely new fetch starts instead of returning the pending deduplication promise.
+
 ### Inspect cache
 
 ```typescript
 const value = await query.snapshot<User>('/api/user')  // Current cached value or undefined
-const itemKeys = query.keys('items')                   // Cached item keys
-const resolverKeys = query.keys('resolvers')           // Pending resolver keys
+const itemKeys = query.keys('items')                   // readonly string[]
+const resolverKeys = query.keys('resolvers')           // readonly string[]
 const date = query.expiration('/api/user')              // Expiration Date or undefined
 ```
 
@@ -138,19 +140,21 @@ const unsub = query.subscribe('/api/user', 'resolved', (event) => {
 })
 unsub()
 
-// One-time listener
+// One-time listener (supports optional AbortSignal for cleanup)
 const event = await query.once('/api/user', 'resolved')
+const event = await query.once('/api/user', 'resolved', signal) // cancellable
 
-// Await next fetch resolution
+// Await next fetch resolution (supports optional AbortSignal)
 const result = await query.next<string>('/api/user')
 const [a, b] = await query.next<[User, Config]>(['/api/user', '/api/config'])
+const obj = await query.next<{ user: User }>({ user: '/api/user' })
 
-// Stream resolutions (async generator)
+// Stream resolutions (async generator -- cleans up listeners on break/return)
 for await (const value of query.stream<User>('/api/user')) {
   console.log(value)
 }
 
-// Stream arbitrary events (async generator)
+// Stream arbitrary events (async generator -- cleans up listeners on break/return)
 for await (const event of query.sequence<User>('/api/user', 'resolved')) {
   console.log(event.detail)
 }
@@ -166,9 +170,11 @@ const unsub = query.subscribeBroadcast()
 unsub()
 ```
 
+**Note:** `subscribeBroadcast()` captures the broadcast reference at call time. If `configure()` later replaces the channel, the unsubscriber still targets the original. `emit()` wraps `postMessage` in try-catch for non-cloneable data.
+
 ## React Bindings
 
-Designed for React 19+ with first-class Suspense and Transitions support.
+Designed for React 19+ with first-class Suspense and Transitions support. Uses React Compiler for automatic memoization -- do NOT use `useMemo`, `useCallback`, or `React.memo`.
 
 ### Setup
 
@@ -194,7 +200,7 @@ function App() {
 - `clearOnForget?` - Auto-refetch after `forget()` (default `false`)
 - `ignoreTransitionContext?` - Use local transitions instead of shared (default `false`)
 
-`QueryProvider` automatically handles BroadcastChannel setup and cleanup.
+`QueryProvider` automatically handles BroadcastChannel setup, cleanup, and cross-tab event forwarding. Includes a guard for environments where `BroadcastChannel` is unavailable.
 
 ### useQuery
 
@@ -251,7 +257,7 @@ const { expiresAt, isExpired, isRefetching, isMutating } = useQueryStatus('/api/
 
 ### useQueryBasic
 
-Minimal hook returning only `data` and `isPending`.
+Minimal hook returning only `data` and `isPending`. Correctly resets data when the key changes to a different cached value.
 
 ```tsx
 const { data, isPending } = useQueryBasic<User>('/api/user/1')
@@ -348,12 +354,18 @@ Pattern: create query with mock fetcher, pass it via `{ query }` option to bypas
 
 - **Expiration is a function, not a number.** Always `expiration: () => 5000`, not `expiration: 5000`.
 - **`useQuery` suspends.** Components must be inside `<Suspense>` or React throws.
-- **`data` from `useQuery` is always resolved.** It's never undefined or null from a loading state. Suspense handles loading.
+- **`data` from `useQuery` is always resolved.** Never undefined/null from loading state. Suspense handles loading.
 - **`hydrate` without expiration creates immediately-stale data.** The first `query()` returns the hydrated value, the second triggers a refetch.
-- **Mutation with `expiration: () => 0` makes the value immediately stale.** Provide a non-zero expiration in `mutate` options if you want it to persist.
-- **`forget` does not cancel pending fetches.** Use `abort` to cancel in-flight requests.
+- **Mutation with `expiration: () => 0` makes the value immediately stale.** Provide a non-zero expiration if you want it to persist.
+- **`forget` does not cancel pending fetches.** Only removes items from the items cache. Use `abort` to cancel in-flight requests.
 - **`stale: false` blocks until refetch completes.** Default `stale: true` returns old data while revalidating in the background.
-- **`subscribe('refetching')` on a key with a pending resolver fires immediately.** This is intentional for late subscribers.
+- **`subscribe('refetching')` on a key with a pending resolver fires immediately.** Intentional for late subscribers.
 - **BroadcastChannel is not auto-created in vanilla usage.** `QueryProvider` handles it in React. In core, configure it manually.
 - **Pass stable `keys` arrays to `useQueryPrefetch` / `QueryPrefetch`.** Use `useMemo` or a module-level constant to avoid infinite re-renders.
 - **`useQueryInstance` throws if no query is in context or options.** Ensure `QueryProvider` is an ancestor or pass `{ query }` in options.
+- **React Compiler handles memoization.** Do NOT use `useMemo`, `useCallback`, or `React.memo` -- the compiler does it automatically.
+- **`once()` and `next()` accept an optional `AbortSignal`.** Use to cancel pending listeners when breaking out of generators.
+- **`stream()` and `sequence()` clean up on break.** Internal `AbortController` cancels pending listeners via `finally` block.
+- **Abort race condition is handled.** If `abort()` fires after fetch resolves but before cache write, the result is discarded and the promise rejects.
+- **`next()` supports object keys.** `await query.next<{ user: User }>({ user: '/api/user' })` returns an object with the same shape.
+- **`fresh: true` aborts then refetches.** Ensures a genuinely new fetch instead of returning the pending deduplication promise.
