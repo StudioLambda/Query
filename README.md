@@ -6,7 +6,7 @@ Lambda Query is a library created to manage asynchronous data on your code. This
 
 ## Documentation
 
-Find out about the project and discover the features at the [Documentation](https://docs.lambda-studio.com/query/getting-started/)
+Find out about the project and discover the features at the [Documentation](https://erik.cat/blog/query-docs/)
 
 ## Installation
 
