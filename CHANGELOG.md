@@ -1,10 +1,24 @@
 # Changelog
 
+## [1.5.9] - 2026-04-12
+
+### 🐛 Bug Fixes
+
+- Resolve medium-severity audit issues in core query and React bindings
+- Reject promise instead of silently returning when abort race is detected
+
+### ⚙️ Miscellaneous Tasks
+
+- Fix low-severity audit issues across codebase
 ## [1.5.8] - 2026-04-12
 
 ### 🐛 Bug Fixes
 
 - Resolve high-severity audit issues in core query and React bindings
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V1.5.8
 ## [1.5.7] - 2026-03-23
 
 ### 📚 Documentation
