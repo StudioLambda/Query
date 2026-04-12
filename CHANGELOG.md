@@ -1,10 +1,16 @@
 # Changelog
 
+## [1.5.12] - 2026-04-12
+
+### 📚 Documentation
+
+- Update documentation links to docs.lambda-studio.com
 ## [1.5.11] - 2026-04-12
 
 ### ⚙️ Miscellaneous Tasks
 
 - Upgrade all devDependencies to latest versions
+- *(release)* V1.5.11
 ## [1.5.10] - 2026-04-12
 
 ### ⚙️ Miscellaneous Tasks
