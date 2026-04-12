@@ -1,10 +1,16 @@
 # Changelog
 
+## [1.5.11] - 2026-04-12
+
+### ⚙️ Miscellaneous Tasks
+
+- Upgrade all devDependencies to latest versions
 ## [1.5.10] - 2026-04-12
 
 ### ⚙️ Miscellaneous Tasks
 
 - Rename and update agent skill from studiolambda-query to lambda-query
+- *(release)* V1.5.10
 ## [1.5.9] - 2026-04-12
 
 ### 🐛 Bug Fixes
