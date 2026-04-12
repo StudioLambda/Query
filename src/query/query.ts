@@ -384,6 +384,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
             // before we write to the cache, bail out to avoid writing
             // stale data that contradicts the abort.
             if (controller.signal.aborted) {
+              reject(controller.signal.reason as Error)
               return
             }
 
