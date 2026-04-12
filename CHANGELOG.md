@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.10] - 2026-04-12
+
+### ⚙️ Miscellaneous Tasks
+
+- Rename and update agent skill from studiolambda-query to lambda-query
 ## [1.5.9] - 2026-04-12
 
 ### 🐛 Bug Fixes
@@ -10,6 +15,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Fix low-severity audit issues across codebase
+- *(release)* V1.5.9
 ## [1.5.8] - 2026-04-12
 
 ### 🐛 Bug Fixes
