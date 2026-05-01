@@ -1,11 +1,17 @@
 # Changelog
 
+## [1.5.14] - 2026-05-01
+
+### ⚙️ Miscellaneous Tasks
+
+- Restructure lambda-query skill with detailed reference docs
 ## [1.5.13] - 2026-05-01
 
 ### ⚙️ Miscellaneous Tasks
 
 - Move lambda-query skill to top-level skills/ folder
 - Update oxfmt ignore pattern from .agents to skills
+- *(release)* V1.5.13
 ## [1.5.12] - 2026-04-12
 
 ### 📚 Documentation
