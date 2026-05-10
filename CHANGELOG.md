@@ -1,10 +1,16 @@
 # Changelog
 
+## [1.5.15] - 2026-05-10
+
+### 🐛 Bug Fixes
+
+- *(deps)* Regenerate lockfile with clean node_modules
 ## [1.5.14] - 2026-05-01
 
 ### ⚙️ Miscellaneous Tasks
 
 - Restructure lambda-query skill with detailed reference docs
+- *(release)* V1.5.14
 ## [1.5.13] - 2026-05-01
 
 ### ⚙️ Miscellaneous Tasks
