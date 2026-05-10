@@ -1,10 +1,19 @@
 # Changelog
 
+## [1.5.16] - 2026-05-10
+
+### 🐛 Bug Fixes
+
+- Defer synchronous emit() calls to prevent React render-phase violations
 ## [1.5.15] - 2026-05-10
 
 ### 🐛 Bug Fixes
 
 - *(deps)* Regenerate lockfile with clean node_modules
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V1.5.15
 ## [1.5.14] - 2026-05-01
 
 ### ⚙️ Miscellaneous Tasks
