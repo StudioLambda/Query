@@ -33,7 +33,7 @@ export default defineConfig({
       formats: ['es', 'cjs'],
     },
     rolldownOptions: {
-      external: ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', 'solid-js'],
+      external: [/^react(-dom)?(\/.*)?$/, 'solid-js'],
       output: {
         keepNames: true,
       },
@@ -53,13 +53,13 @@ export default defineConfig({
     dts({
       include: ['**/*.ts*'],
       exclude: ['**/*.test.ts*'],
-      outDir: '../../dist',
+      outDirs: '../../dist',
       root: './src/query',
     }),
     dts({
       include: ['**/*.ts*'],
       exclude: ['**/*.test.ts*'],
-      outDir: '../../dist',
+      outDirs: '../../dist',
       root: './src/react',
     }),
     // dts({
