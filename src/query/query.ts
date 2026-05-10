@@ -167,7 +167,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
     // For the refetching event, we want to immediately return if there's
     // a pending resolver.
     if (event === 'refetching' && value !== undefined) {
-      emit(key, event, value.item)
+      queueMicrotask(() => emit(key, event, value.item))
     }
 
     return function () {
@@ -426,7 +426,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
 
       // Adds the resolver to the cache.
       resolversCache.set(key, { item: result, controller })
-      emit(key, 'refetching', result)
+      queueMicrotask(() => emit(key, 'refetching', result))
 
       // The promise executor runs synchronously,
       // so trigger is guaranteed to be defined here.
