@@ -40,7 +40,15 @@ export function defaultFetcher<T>(
 }
 
 /**
- * Creates a new query instance.
+ * Creates an isolated query instance with cache, events, and fetch defaults.
+ * Mutations commit in call order per key; independent keys do not wait for
+ * one another. Committed mutations and hydration supersede older fetches
+ * without changing the results returned to those fetches' callers.
+ *
+ * @example
+ * const client = createQuery({ fetcher: async () => 'server value' })
+ * const value = await client.query<string>('profile')
+ * await client.mutate('profile', value.toUpperCase())
  */
 export function createQuery(instanceOptions?: Configuration): Query {
   /**
@@ -59,6 +67,46 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * Stores the resolvers cache.
    */
   let resolversCache = instanceOptions?.resolversCache ?? new Map<string, ResolversCacheItem>()
+
+  /**
+   * Tracks only pending mutation tails so functional mutations read the
+   * previous committed value. Settled tails are removed, including failures.
+   */
+  const mutations = new Map<string, Promise<unknown>>()
+
+  /**
+   * Marks fetch promises invalidated by committed local writes. Weak entries
+   * do not retain completed requests or accumulate per-key generations.
+   */
+  const supersededFetches = new WeakSet<Promise<unknown>>()
+
+  /**
+   * Prevents the current fetch from publishing over a committed local write.
+   * The fetch still settles normally for callers already awaiting it.
+   */
+  function supersedeFetch(key: string): void {
+    /** Only the resolver active at the local commit loses publication rights. */
+    const pending = resolversCache.get(key)
+    if (pending !== undefined) {
+      supersededFetches.add(pending.item)
+    }
+  }
+
+  /**
+   * Retires a superseded fetch without deleting a later revalidation's
+   * resolver. Returns whether its cache writes and events must be skipped.
+   */
+  function retireSupersededFetch(key: string, promise: Promise<unknown>): boolean {
+    if (!supersededFetches.has(promise)) {
+      return false
+    }
+
+    if (resolversCache.get(key)?.item === promise) {
+      resolversCache.delete(key)
+    }
+
+    return true
+  }
 
   /**
    * Event manager.
@@ -176,44 +224,77 @@ export function createQuery(instanceOptions?: Configuration): Query {
   }
 
   /**
-   * Mutates the key with a given optimistic value.
-   * The mutated value is considered expired and will be
-   * replaced immediately if a refetch happens when expired
-   * is true. If expired is false, the value expiration time
-   * is added as if it was a valid data refetched. Alternatively
-   * you can provide a Date to decide when the expiration happens.
+   * Commits an optimistic value, serializing mutations for the same key.
+   * Functional resolvers read the preceding committed value and expiration;
+   * a rejected mutation leaves that value intact and does not block the queue.
+   * Successful commits supersede older fetches. Values expire immediately
+   * unless options.expiration supplies a lifetime in milliseconds.
+   * A functional resolver must not await another mutation on its own key,
+   * because that mutation is queued behind the resolver's completion.
+   *
+   * @example
+   * const client = createQuery()
+   * await client.mutate<number>('count', (previous) => (previous ?? 0) + 1)
    */
   async function mutate<T = unknown>(
     key: string,
     resolver: MutationValue<T>,
     options?: MutateOptions<T>
   ): Promise<T> {
+    /**
+     * The previous tail gates this mutation until its commit completes.
+     * Its failure is not inherited by the next mutation.
+     */
+    const previous = mutations.get(key)
+
+    /**
+     * Resolves and commits one queued mutation. Resolver and expiration errors
+     * propagate to its caller before any cache write or fetch invalidation.
+     */
     async function action(resolver: MutationValue<T>) {
+      await previous?.catch(() => {})
+
       if (typeof resolver === 'function') {
+        /** Function values are resolvers, matching the existing mutation API. */
         const fn = resolver as MutationFunction<T>
+        /** Read after the queue gate so this is the preceding committed entry. */
         const value = itemsCache.get(key)
+        /** Await custom cache promises before passing their value to the resolver. */
         const item = (await value?.item) as T
 
         resolver = await fn(item, value?.expiresAt)
       }
 
-      return resolver
+      /** Resolve the value before calculating its lifetime or publishing it. */
+      const item = await resolver
+      /** The lifetime starts at commit, not when this mutation joined the queue. */
+      const expiresAt = new Date()
+
+      expiresAt.setMilliseconds(expiresAt.getMilliseconds() + (options?.expiration?.(item) ?? 0))
+
+      supersedeFetch(key)
+      itemsCache.set(key, { item: result, expiresAt })
+      emit(key, 'mutated', item)
+
+      return item
     }
 
+    /**
+     * The queued result is also the promise stored by a successful commit.
+     * Publishing this tail before emitting allows event handlers to enqueue.
+     */
     const result = action(resolver)
+    mutations.set(key, result)
 
     emit(key, 'mutating', result)
 
-    const item = await result
-    const expiresAt = new Date()
-
-    expiresAt.setMilliseconds(expiresAt.getMilliseconds() + (options?.expiration?.(item) ?? 0))
-
-    itemsCache.set(key, { item: result, expiresAt: expiresAt })
-
-    emit(key, 'mutated', item)
-
-    return item
+    try {
+      return await result
+    } finally {
+      if (mutations.get(key) === result) {
+        mutations.delete(key)
+      }
+    }
   }
 
   /**
@@ -295,6 +376,12 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * be used when you want to populate the cache.
    * Please use mutate() in most cases unless you
    * know what you are doing.
+   * A hydrated value supersedes pending fetch writes and completion events.
+   * Its lifetime defaults to zero milliseconds, as with mutate().
+   *
+   * @example
+   * const client = createQuery()
+   * client.hydrate('profile', { name: 'Ada' }, { expiration: () => 60000 })
    */
   function hydrate<T = unknown>(
     keys: string | readonly string[],
@@ -307,6 +394,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
     expiresAt.setMilliseconds(expiresAt.getMilliseconds() + (options?.expiration?.(item) ?? 0))
 
     for (const key of typeof keys === 'string' ? [keys] : keys) {
+      supersedeFetch(key)
       itemsCache.set(key, { item: result, expiresAt: expiresAt })
       emit(key, 'hydrated', item)
     }
@@ -322,7 +410,14 @@ export function createQuery(instanceOptions?: Configuration): Query {
 
   /**
    * Fetches the key information using a fetcher.
-   * The returned promise contains the result item.
+   * The returned promise contains the result item, including when a later
+   * mutation or hydration supersedes that fetch's cache writes and events.
+   * Superseded requests do not deduplicate subsequent revalidation requests.
+   * Fetch errors reject the promise; stale background errors use events.
+   *
+   * @example
+   * const client = createQuery({ fetcher: async () => 'profile' })
+   * const profile = await client.query<string>('profile', { stale: false })
    */
   function query<T = unknown>(key: string, options?: Options<T>): Promise<T> {
     /**
@@ -357,12 +452,16 @@ export function createQuery(instanceOptions?: Configuration): Query {
      */
     const fresh = options?.fresh ?? instanceFresh
 
-    // Force fetching of the data.
+    /**
+     * Starts a revalidation or shares an existing publishable request.
+     * A superseded request must not delay the next revalidation, even if its
+     * fetcher ignores cancellation or remains pending indefinitely.
+     */
     function refetch(key: string): Promise<T> {
       // Check if there's a pending resolver for that data.
       const pending = resolversCache.get(key)
 
-      if (pending !== undefined) {
+      if (pending !== undefined && !supersededFetches.has(pending.item)) {
         return pending.item as Promise<T>
       }
 
@@ -376,16 +475,19 @@ export function createQuery(instanceOptions?: Configuration): Query {
       const result = new Promise<T>(function (resolve, reject) {
         trigger = async function () {
           try {
-            const result = fetcher(key, { signal: controller.signal })
-
             // Awaits the fetching to get the result item.
-            const item = await result
+            const item = await fetcher(key, { signal: controller.signal })
 
             // If the signal was aborted after the fetch resolved but
             // before we write to the cache, bail out to avoid writing
             // stale data that contradicts the abort.
             if (controller.signal.aborted) {
               reject(controller.signal.reason)
+              return
+            }
+
+            if (retireSupersededFetch(key, result)) {
+              resolve(item)
               return
             }
 
@@ -407,6 +509,11 @@ export function createQuery(instanceOptions?: Configuration): Query {
 
             resolve(item)
           } catch (error) {
+            if (retireSupersededFetch(key, result)) {
+              reject(error)
+              return
+            }
+
             // Remove the resolver.
             resolversCache.delete(key)
 
