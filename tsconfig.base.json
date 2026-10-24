@@ -23,6 +23,7 @@
     "rootDir": ".",
     "jsx": "preserve",
     "allowSyntheticDefaultImports": true,
+    "allowImportingTsExtensions": true,
     "paths": {
       "query:*": ["./src/query/*"],
       "query/react:*": ["./src/react/*"],

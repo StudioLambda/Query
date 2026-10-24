@@ -9,11 +9,20 @@
     "no-shadow": "off",
     "react-in-jsx-scope": "off"
   },
+  "overrides": [
+    {
+      "files": ["**/*.test.tsx"],
+      "rules": {
+        "react/globals": "off",
+        "react/immutability": "off"
+      }
+    }
+  ],
   "settings": {
     "react": {
       "formComponents": [],
       "linkComponents": [],
-      "version": "19.2",
+      "version": "19.3",
       "componentWrapperFunctions": []
     },
     "vitest": {

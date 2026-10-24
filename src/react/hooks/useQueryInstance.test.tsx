@@ -38,6 +38,8 @@ describe('useQueryInstance', function () {
 
     function Component() {
       try {
+        /** This negative fixture deliberately observes the missing-provider error. */
+        // oxlint-disable-next-line react/hooks
         useQueryInstance()
       } catch (e) {
         caughtError = e as Error

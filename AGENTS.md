@@ -213,10 +213,19 @@ The `build` job verifies PRs and pushes after `check` passes. The release job bu
 
 ## Environment
 
-- Node.js 25+ (see `.nvmrc`)
+- Node.js 26.12.1+ (see `.nvmrc`)
 - npm 11+ (package manager)
 - TypeScript version: see `package.json` (currently ~6.0.3)
 - React 19.2+ (peer dependency)
+
+Declaration tooling still requires TypeScript 6's JavaScript compiler API, and its
+Volar dependencies declare a TypeScript `<7` peer requirement. Keep TypeScript 6
+until that toolchain supports TypeScript 7 without invalid peer dependencies.
+
+Vitest's global mock clearing is disabled because concurrent tests own independent
+mocks. React test fixtures intentionally expose hook results to assertions, so
+`react/globals` and `react/immutability` are disabled only for `.test.tsx` files;
+production React code retains both rules.
 
 ## Library API Guidance
 
