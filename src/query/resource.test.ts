@@ -3,6 +3,32 @@ import { createQuery } from './query'
 import { type FetcherFunction } from './options'
 
 describe.concurrent('instance-owned fresh resources', () => {
+  it('keeps the replacement resource and resolver after an obsolete request rejects', async ({
+    expect,
+  }) => {
+    /** An obsolete request may reject after a replacement has taken ownership. */
+    const obsolete = Promise.withResolvers<string>()
+    const replacement = Promise.withResolvers<string>()
+    const error = new Error('obsolete request failed')
+    const fetcher = vi
+      .fn<FetcherFunction<string>>()
+      .mockReturnValueOnce(obsolete.promise)
+      .mockReturnValueOnce(replacement.promise)
+    const instance = createQuery({ fetcher, fresh: true })
+    const resource = instance.resource('/ownership')
+    const rejected = expect(resource.promise).rejects.toBe(error)
+    const current = instance.query('/ownership', { fresh: true })
+    obsolete.reject(error)
+    await rejected
+    expect(instance.query('/ownership', { fresh: false })).toBe(current)
+    expect(resource.promise).toBe(current)
+    replacement.resolve('current')
+    await expect(current).resolves.toBe('current')
+    expect(instance.caches().items.get('/ownership')?.item).toBe(current)
+    expect(resource.promise).toBe(current)
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+
   it('shares a request until its final committed consumer releases it', async ({ expect }) => {
     const fetcher = vi.fn<FetcherFunction<string>>(async () => 'value')
     const instance = createQuery({ fetcher, fresh: true, expiration: () => 0 })
