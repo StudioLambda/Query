@@ -10,15 +10,29 @@ import { useQueryTransitionContext } from './useQueryTransitionContext'
  * the fetched data and the current pending state.
  *
  * @template T - The type of the fetched data.
+ * @example
+ * const resource: BasicResource<string> = { data: 'Ada', isPending: false }
+ * console.log(resource.data) // 'Ada'
  */
 export interface BasicResource<T = unknown> {
   /**
-   * The fetched data for the given key.
+   * Latest resolved value retained from the selected query key.
+   * Initial blocking reads suspend instead of returning a loading sentinel;
+   * callers must treat shared cached objects as immutable.
+   *
+   * @example
+   * const resource: BasicResource<string> = { data: 'Ada', isPending: false }
+   * console.log(resource.data) // 'Ada'
    */
   readonly data: T
 
   /**
-   * Indicates whether a transition is currently pending.
+   * Pending state of the local or provider-selected React transition.
+   * This is separate from initial Suspense loading and cache expiration.
+   *
+   * @example
+   * const resource: BasicResource<string> = { data: 'Ada', isPending: false }
+   * const view = <span aria-busy={resource.isPending}>{resource.data}</span>
    */
   readonly isPending: boolean
 }
@@ -28,6 +42,12 @@ export interface BasicResource<T = unknown> {
  * query options, and an optional query instance override.
  *
  * @template T - The type of the fetched data.
+ * @example
+ * const options: BasicResourceOptions<string> = {
+ *   query: createQuery({ fetcher: async () => 'Ada' }), clearOnForget: true,
+ * }
+ * function Profile() { return <span>{useQueryBasic('profile', options).data}</span> }
+ * const view = <Suspense fallback="Loading"><Profile /></Suspense>
  */
 export type BasicResourceOptions<T = unknown> = ContextValue & Options<T> & QueryInstance
 
@@ -44,7 +64,8 @@ export type BasicResourceOptions<T = unknown> = ContextValue & Options<T> & Quer
  * lifetime, not each render. Initial retries and same-key fresh consumers
  * share one request, even after expiration. The last consumer's cleanup
  * releases it; a later mount starts fresh again. Explicit refetch/query
- * actions still force new requests. An abandoned initial render remains
+ * actions can force new requests with effective fresh: true; otherwise they
+ * retain normal cache policy. An abandoned initial render remains
  * reusable until the key is forgotten, request configuration changes, or the
  * instance is garbage-collected. Notification-only configuration preserves it.
  *
@@ -60,10 +81,24 @@ export type BasicResourceOptions<T = unknown> = ContextValue & Options<T> & Quer
  *
  * @example
  * ```tsx
- * const { data, isPending } = useQueryBasic<User>('/api/user/1')
+ * import { Suspense } from 'react'
+ * import { createRoot } from 'react-dom/client'
+ * import { ErrorBoundary } from 'react-error-boundary'
+ * import { createQuery } from '@studiolambda/query'
+ * import { QueryProvider, useQueryBasic } from '@studiolambda/query/react'
  *
- * if (isPending) return <Loading />
- * return <UserProfile user={data} />
+ * const query = createQuery({ fetcher: async () => 'Ada' })
+ * function Profile() {
+ *   const { data, isPending } = useQueryBasic<string>('profile')
+ *   return <span aria-busy={isPending}>{data}</span>
+ * }
+ * createRoot(document.createElement('div')).render(
+ *   <QueryProvider query={query}>
+ *     <ErrorBoundary fallback={<span>Unavailable</span>}>
+ *       <Suspense fallback="Loading"><Profile /></Suspense>
+ *     </ErrorBoundary>
+ *   </QueryProvider>
+ * )
  * ```
  */
 export function useQueryBasic<T = unknown>(
@@ -119,12 +154,32 @@ export function useQueryBasic<T = unknown>(
 
   useEffect(() => retain(), [retain])
 
+  /**
+   * Applies a completed fetch value inside the selected transition.
+   * The effect event reads the latest transition without resubscribing.
+   *
+   * @example
+   * function Profile() { return <span>{useQueryBasic<string>('profile').data}</span> }
+   * const view = <QueryProvider query={createQuery({ fetcher: async () => 'Ada' })}>
+   *   <Suspense fallback="Loading"><Profile /></Suspense>
+   * </QueryProvider>
+   */
   const onResolved = useEffectEvent(function (event: CustomEventInit<T>) {
     startTransition(function () {
       setData(event.detail as T)
     })
   })
 
+  /**
+   * Tracks an asynchronous mutation in React's pending transition state.
+   * Awaited results are committed inside another transition after resolution.
+   *
+   * @example
+   * function Profile() { return <span>{useQueryBasic<string>('profile').data}</span> }
+   * const query = createQuery({ fetcher: async () => 'Ada' })
+   * const view = <QueryProvider query={query}><Suspense fallback="Loading"><Profile /></Suspense></QueryProvider>
+   * await query.mutate('profile', 'Grace')
+   */
   const onMutating = useEffectEvent(function (event: CustomEventInit<Promise<T>>) {
     startTransition(async function () {
       const value = await (event.detail as Promise<T>)
@@ -135,12 +190,32 @@ export function useQueryBasic<T = unknown>(
     })
   })
 
+  /**
+   * Reflects the value committed by the core's per-key mutation queue.
+   * Completion details are values, not the mutating event's pending promise.
+   *
+   * @example
+   * function Profile() { return <span>{useQueryBasic<string>('profile').data}</span> }
+   * const query = createQuery({ fetcher: async () => 'Ada' })
+   * const view = <QueryProvider query={query}><Suspense fallback="Loading"><Profile /></Suspense></QueryProvider>
+   * await query.mutate('profile', 'Grace')
+   */
   const onMutated = useEffectEvent(function (event: CustomEventInit<T>) {
     startTransition(function () {
       setData(event.detail as T)
     })
   })
 
+  /**
+   * Reflects explicitly seeded data without performing another query.
+   * The shared value is retained; no clone is made for component state.
+   *
+   * @example
+   * function Profile() { return <span>{useQueryBasic<string>('profile').data}</span> }
+   * const query = createQuery({ fetcher: async () => 'Ada' })
+   * const view = <QueryProvider query={query}><Suspense fallback="Loading"><Profile /></Suspense></QueryProvider>
+   * query.hydrate('profile', 'Grace')
+   */
   const onHydrated = useEffectEvent(function (event: CustomEventInit<T>) {
     startTransition(function () {
       setData(event.detail as T)
@@ -152,6 +227,12 @@ export function useQueryBasic<T = unknown>(
    * transition errors. The core owns error events and caller rejections;
    * a failed or aborted request has no new value for this subscription.
    * This also contains late rejections after the subscription key changes.
+   *
+   * @example
+   * function Profile() { return <span>{useQueryBasic<string>('profile').data}</span> }
+   * const query = createQuery({ fetcher: async () => 'Ada' })
+   * const view = <QueryProvider query={query}><Suspense fallback="Loading"><Profile /></Suspense></QueryProvider>
+   * await query.query('profile', { fresh: true })
    */
   const onRefetching = useEffectEvent(function (event: CustomEventInit<Promise<T>>) {
     startTransition(async function () {
@@ -171,6 +252,19 @@ export function useQueryBasic<T = unknown>(
     })
   })
 
+  /**
+   * Reselects forgotten data only when clearOnForget is enabled.
+   * Fresh reads join the instance-owned selection; ordinary reads follow
+   * cache policy. The selected transition wraps the replacement value.
+   *
+   * @example
+   * function Profile() { return <span>{useQueryBasic<string>('profile').data}</span> }
+   * const query = createQuery({ fetcher: async () => 'Ada' })
+   * const view = <QueryProvider query={query} clearOnForget>
+   *   <Suspense fallback="Loading"><Profile /></Suspense>
+   * </QueryProvider>
+   * await query.forget('profile')
+   */
   const onForgotten = useEffectEvent(function () {
     if (clearOnForget) {
       startTransition(async function () {

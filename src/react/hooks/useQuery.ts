@@ -8,6 +8,16 @@ import { useQueryBasic, type BasicResource } from './useQueryBasic'
 /**
  * Combined type that merges query actions, basic resource data,
  * and status information into a single interface.
+ * This local composition keeps Resource aligned with the three hooks it uses.
+ *
+ * @example
+ * function Profile() {
+ *   const resource = useQuery<string>('profile')
+ *   return <span>{resource.data}</span>
+ * }
+ * const view = <QueryProvider query={createQuery({ fetcher: async () => 'Ada' })}>
+ *   <Suspense fallback="Loading"><Profile /></Suspense>
+ * </QueryProvider>
  */
 type AdditionalHooks<T> = QueryActions<T> & BasicResource<T> & Status
 
@@ -16,15 +26,44 @@ type AdditionalHooks<T> = QueryActions<T> & BasicResource<T> & Status
  * pending state, query actions (refetch, mutate, forget), and cache status.
  *
  * @template T - The type of the fetched data.
+ * @example
+ * function Profile() {
+ *   const resource: Resource<string> = useQuery<string>('profile')
+ *   return <span>{resource.data}</span>
+ * }
+ * const view = <QueryProvider query={createQuery({ fetcher: async () => 'Ada' })}>
+ *   <Suspense fallback="Loading"><Profile /></Suspense>
+ * </QueryProvider>
  */
 export interface Resource<T = unknown> extends AdditionalHooks<T> {
   /**
-   * The fetched data for the given key.
+   * Current resolved value, retained rather than cloned from the cache.
+   * Treat it as immutable; blocking initial reads suspend instead of
+   * returning undefined as a loading sentinel.
+   *
+   * @example
+   * function Profile() {
+   *   const resource = useQuery<string>('profile')
+   *   return <span>{resource.data}</span>
+   * }
+   * const view = <QueryProvider query={createQuery({ fetcher: async () => 'Ada' })}>
+   *   <Suspense fallback="Loading"><Profile /></Suspense>
+   * </QueryProvider>
    */
   readonly data: T
 
   /**
-   * Indicates whether a transition is currently pending.
+   * Reports the selected local or shared React transition's pending state.
+   * It is not an initial-loading flag; initial blocking reads use Suspense.
+   *
+   * @example
+   * function Profile() {
+   *   const resource = useQuery<string>('profile')
+   *   return <span aria-busy={resource.isPending}>{resource.data}</span>
+   * }
+   * const view = <QueryProvider query={createQuery({ fetcher: async () => 'Ada' })}>
+   *   <Suspense fallback="Loading"><Profile /></Suspense>
+   * </QueryProvider>
    */
   readonly isPending: boolean
 }
@@ -34,6 +73,12 @@ export interface Resource<T = unknown> extends AdditionalHooks<T> {
  * query options, and an optional query instance override.
  *
  * @template T - The type of the fetched data.
+ * @example
+ * const options: ResourceOptions<string> = {
+ *   query: createQuery({ fetcher: async () => 'Ada' }), stale: false,
+ * }
+ * function Profile() { return <span>{useQuery('profile', options).data}</span> }
+ * const view = <Suspense fallback="Loading"><Profile /></Suspense>
  */
 export type ResourceOptions<T = unknown> = ContextValue & Options<T> & QueryInstance
 
@@ -51,10 +96,24 @@ export type ResourceOptions<T = unknown> = ContextValue & Options<T> & QueryInst
  *
  * @example
  * ```tsx
- * const { data, isPending, refetch } = useQuery<User>('/api/user/1')
+ * import { Suspense } from 'react'
+ * import { createRoot } from 'react-dom/client'
+ * import { ErrorBoundary } from 'react-error-boundary'
+ * import { createQuery } from '@studiolambda/query'
+ * import { QueryProvider, useQuery } from '@studiolambda/query/react'
  *
- * if (isPending) return <Loading />
- * return <UserProfile user={data} onRefresh={refetch} />
+ * const query = createQuery({ fetcher: async () => 'Ada' })
+ * function Profile() {
+ *   const { data, isPending } = useQuery<string>('profile')
+ *   return <span aria-busy={isPending}>{data}</span>
+ * }
+ * createRoot(document.createElement('div')).render(
+ *   <QueryProvider query={query}>
+ *     <ErrorBoundary fallback={<span>Unavailable</span>}>
+ *       <Suspense fallback="Loading"><Profile /></Suspense>
+ *     </ErrorBoundary>
+ *   </QueryProvider>
+ * )
  * ```
  */
 export function useQuery<T = unknown>(key: string, options?: ResourceOptions<T>): Resource<T> {
