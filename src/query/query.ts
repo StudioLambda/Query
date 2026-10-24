@@ -409,15 +409,24 @@ export function createQuery(instanceOptions?: Configuration): Query {
   }
 
   /**
-   * Fetches the key information using a fetcher.
-   * The returned promise contains the result item, including when a later
-   * mutation or hydration supersedes that fetch's cache writes and events.
-   * Superseded requests do not deduplicate subsequent revalidation requests.
-   * Fetch errors reject the promise; stale background errors use events.
+   * Fetches a key or reuses its cached or pending promise according to the
+   * configured freshness and expiration policy. Fresh requests abort pending
+   * work; superseded requests settle for their callers without publishing
+   * results or errors over a newer request's state.
+   * Mutations and hydration also supersede older fetch writes and completion
+   * events. Superseded requests do not deduplicate subsequent revalidation.
    *
+   * @param key - Cache key passed unchanged to the configured fetcher.
+   * @param options - Per-call overrides for fetching and cache behavior.
+   * @returns The cached or active request promise, rejecting on fetch failure.
    * @example
-   * const client = createQuery({ fetcher: async () => 'profile' })
-   * const profile = await client.query<string>('profile', { stale: false })
+   * const client = createQuery({ fetcher: async () => 'current' })
+   * try {
+   *   const value = await client.query('status', { fresh: true })
+   *   console.log(value)
+   * } catch (error) {
+   *   console.error(error)
+   * }
    */
   function query<T = unknown>(key: string, options?: Options<T>): Promise<T> {
     /**
@@ -453,9 +462,12 @@ export function createQuery(instanceOptions?: Configuration): Query {
     const fresh = options?.fresh ?? instanceFresh
 
     /**
-     * Starts a revalidation or shares an existing publishable request.
-     * A superseded request must not delay the next revalidation, even if its
-     * fetcher ignores cancellation or remains pending indefinitely.
+     * Deduplicates pending work or starts a request that owns its resolver
+     * through its unique controller. Only that owner may publish results or
+     * errors and update shared caches; obsolete callers still settle with
+     * their own fetch result (or abort reason).
+     * Requests superseded by a local write cannot delay revalidation, even
+     * when their fetchers ignore cancellation or remain pending indefinitely.
      */
     function refetch(key: string): Promise<T> {
       // Check if there's a pending resolver for that data.
@@ -465,13 +477,19 @@ export function createQuery(instanceOptions?: Configuration): Query {
         return pending.item as Promise<T>
       }
 
-      // Create the abort controller that will be
-      // called when a query is aborted.
+      /**
+       * Cancels this fetch and identifies its ownership of the resolver slot.
+       * Replacement requests always receive a different controller.
+       */
       const controller = new AbortController()
 
+      /** Starts fetching only after this request is registered for deduplication. */
       let trigger: TriggerFunction = undefined
 
-      // Initiate the fetching request.
+      /**
+       * This request's stable promise is returned, deduplicated and cached.
+       * Never read another request's promise from the shared resolver slot.
+       */
       const result = new Promise<T>(function (resolve, reject) {
         trigger = async function () {
           try {
@@ -486,30 +504,33 @@ export function createQuery(instanceOptions?: Configuration): Query {
               return
             }
 
-            if (retireSupersededFetch(key, result)) {
+            if (
+              resolversCache.get(key)?.controller !== controller ||
+              retireSupersededFetch(key, result)
+            ) {
               resolve(item)
               return
             }
-
-            const promise =
-              (resolversCache.get(key)?.item as Promise<T> | undefined) ?? Promise.resolve(item)
-
-            // Removes the resolver from the cache.
-            resolversCache.delete(key)
 
             // Create the expiration time for the item.
             const expiresAt = new Date()
             expiresAt.setMilliseconds(expiresAt.getMilliseconds() + expiration(item))
 
             // Set the item to the cache.
-            itemsCache.set(key, { item: promise, expiresAt })
+            itemsCache.set(key, { item: result, expiresAt })
+
+            // Removes this request's resolver after its cache write succeeds.
+            resolversCache.delete(key)
 
             // Notify of the resolved item.
             emit(key, 'resolved', item)
 
             resolve(item)
           } catch (error) {
-            if (retireSupersededFetch(key, result)) {
+            if (
+              resolversCache.get(key)?.controller !== controller ||
+              retireSupersededFetch(key, result)
+            ) {
               reject(error)
               return
             }

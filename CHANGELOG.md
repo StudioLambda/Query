@@ -1,10 +1,28 @@
 # Changelog
 
+## [1.5.18] - 2026-10-24
+
+### 🐛 Bug Fixes
+
+- Preserve rendered data on background refetch errors
+## [1.5.17] - 2026-10-24
+
+### 🐛 Bug Fixes
+
+- Preserve request ownership across overlapping fetches
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V1.5.17
 ## [1.5.16] - 2026-05-10
 
 ### 🐛 Bug Fixes
 
 - Defer synchronous emit() calls to prevent React render-phase violations
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V1.5.16
 ## [1.5.15] - 2026-05-10
 
 ### 🐛 Bug Fixes
@@ -173,14 +191,14 @@
 - Query on provider
 - *(react)* Preserve hooks and component names and fixes to broadcast channel
 
-### 💼 Other
-
-- *(ci)* Only build if pr to main
-
 ### ⚙️ Miscellaneous Tasks
 
 - *(ci)* Rename ci jobs
 - Rename prettier config file
+
+### 💼 Other
+
+- *(ci)* Only build if pr to main
 ## [1.3.0] - 2025-09-09
 
 ### 🚀 Features

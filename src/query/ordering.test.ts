@@ -154,6 +154,8 @@ describe.concurrent('cache write ordering', () => {
 
     expect(await refetch).toBe('newer')
     expect(await client.snapshot('key')).toBe('newer')
+    expect(client.caches().items.get('key')?.item).toBe(refetch)
+    expect(client.query('key')).toBe(refetch)
     expect(fetcher).toHaveBeenCalledTimes(2)
   })
 
@@ -194,5 +196,63 @@ describe.concurrent('cache write ordering', () => {
 
     expect(await refetch).toBe('newer')
     expect(await client.snapshot('key')).toBe('newer')
+    expect(client.caches().items.get('key')?.item).toBe(refetch)
+    expect(client.query('key')).toBe(refetch)
+  })
+
+  it('preserves ownership through mutation revalidation and a fresh replacement', async ({
+    expect,
+  }) => {
+    /** The original fetch remains pending across the mutation's commit. */
+    const originalFetch = Promise.withResolvers<string>()
+    /** Revalidation ignores abort so its late settlement can be controlled. */
+    const revalidationFetch = Promise.withResolvers<string>()
+    /** The fresh replacement must retain resolver ownership throughout. */
+    const replacementFetch = Promise.withResolvers<string>()
+    /** Ordered deferred results reproduce both invalidation mechanisms. */
+    const fetcher = vi
+      .fn<() => Promise<string>>()
+      .mockReturnValueOnce(originalFetch.promise)
+      .mockReturnValueOnce(revalidationFetch.promise)
+      .mockReturnValueOnce(replacementFetch.promise)
+    /** Obsolete failures must not remove the committed mutation. */
+    const client = createQuery({ fetcher, removeOnError: true })
+    /** Only the final owning fetch may publish a resolved event. */
+    const onResolved = vi.fn<() => void>()
+    /** Neither obsolete fetch may publish an error over the replacement. */
+    const onError = vi.fn<() => void>()
+    client.subscribe('key', 'resolved', onResolved)
+    client.subscribe('key', 'error', onError)
+
+    /** Observe each rejection before releasing or aborting its request. */
+    const original = client.query('key')
+    /** Mutation supersession keeps the original caller's rejection intact. */
+    const originalRejected = expect(original).rejects.toThrow('obsolete failure')
+    await client.mutate('key', 'saved')
+    /** Default mutation expiration permits revalidation before the old fetch settles. */
+    const revalidation = client.query('key', { stale: false })
+    /** Fresh cancellation rejects the middle request without removing its replacement. */
+    const revalidationRejected = expect(revalidation).rejects.toBeInstanceOf(DOMException)
+    /** This promise must own both the pending resolver and the eventual item. */
+    const replacement = client.query('key', { fresh: true })
+
+    originalFetch.reject(new Error('obsolete failure'))
+    revalidationFetch.resolve('aborted value')
+    await Promise.all([originalRejected, revalidationRejected])
+
+    expect(await client.snapshot('key')).toBe('saved')
+    expect(client.caches().resolvers.get('key')?.item).toBe(replacement)
+    expect(client.query('key', { stale: false })).toBe(replacement)
+    expect(onResolved).not.toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
+
+    replacementFetch.resolve('current')
+    expect(await replacement).toBe('current')
+    expect(client.caches().items.get('key')?.item).toBe(replacement)
+    expect(client.query('key')).toBe(replacement)
+    expect(client.keys('resolvers')).toEqual([])
+    expect(onResolved).toHaveBeenCalledTimes(1)
+    expect(onError).not.toHaveBeenCalled()
+    expect(fetcher).toHaveBeenCalledTimes(3)
   })
 })
