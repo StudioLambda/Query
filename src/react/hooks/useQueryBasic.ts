@@ -40,6 +40,11 @@ export type BasicResourceOptions<T = unknown> = ContextValue & Options<T> & Quer
  * additional actions (refetch, mutate, forget) or status information.
  * Use useQuery for a more complete solution.
  *
+ * Refetch subscription failures preserve the rendered value; the query
+ * instance reports them through its error event. Blocking render promises
+ * still reject into the nearest error boundary, and action promises keep
+ * their own rejection behavior.
+ *
  * @template T - The type of the fetched data.
  * @param key - A unique string identifier for the cached resource.
  * @param options - Optional configuration for the query behavior.
@@ -131,9 +136,23 @@ export function useQueryBasic<T = unknown>(
     })
   })
 
+  /**
+   * Tracks refetch progress without promoting observer failures to React
+   * transition errors. The core owns error events and caller rejections;
+   * a failed or aborted request has no new value for this subscription.
+   * This also contains late rejections after the subscription key changes.
+   */
   const onRefetching = useEffectEvent(function (event: CustomEventInit<Promise<T>>) {
     startTransition(async function () {
-      const value = await (event.detail as Promise<T>)
+      /** Only a successful refetch may replace the rendered value. */
+      let value: T
+      try {
+        value = await (event.detail as Promise<T>)
+      } catch {
+        // Error reporting belongs to the query's error event and caller
+        // promise, not this background observer's React error boundary.
+        return
+      }
 
       startTransition(function () {
         setData(value)
