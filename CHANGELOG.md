@@ -1,10 +1,19 @@
 # Changelog
 
+## [1.5.18] - 2026-10-24
+
+### 🐛 Bug Fixes
+
+- Preserve rendered data on background refetch errors
 ## [1.5.17] - 2026-10-24
 
 ### 🐛 Bug Fixes
 
 - Preserve request ownership across overlapping fetches
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V1.5.17
 ## [1.5.16] - 2026-05-10
 
 ### 🐛 Bug Fixes
