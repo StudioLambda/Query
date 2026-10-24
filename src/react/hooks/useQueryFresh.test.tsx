@@ -12,8 +12,8 @@ import { QueryProvider } from '../components/QueryProvider'
  * the hook or its instance; undefined deliberately preserves instance defaults.
  */
 interface ConsumerProps {
-  /** The instance whose request lifetime is under test. */
-  readonly instance: Query
+  /** Optional instance override; omit it to exercise provider context lookup. */
+  readonly instance?: Query
   /** The cache key, changed without remounting to exercise hook state. */
   readonly resourceKey: string
   /** An optional per-hook override of instance freshness. */
@@ -298,9 +298,21 @@ describe('fresh Suspense requests', () => {
     expect(fetcher).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps the initial request when its provider configures broadcasting', async ({ expect }) => {
+  it('keeps a fresh request and caller channel ownership through provider cleanup', async ({
+    expect,
+  }) => {
     const { fetcher, requests } = createDelayedFetcher()
-    const instance = createQuery({ fetcher, fresh: true })
+    /** Synchronous channel double avoids cross-tab I/O while tracking ownership. */
+    const broadcast: BroadcastChannel = Object.assign(new EventTarget(), {
+      name: 'fresh:account-a',
+      onmessage: null,
+      onmessageerror: null,
+      postMessage: vi.fn<BroadcastChannel['postMessage']>(),
+      close: vi.fn<BroadcastChannel['close']>(),
+    })
+    const add = vi.spyOn(broadcast, 'addEventListener')
+    const remove = vi.spyOn(broadcast, 'removeEventListener')
+    const instance = createQuery({ fetcher, fresh: true, broadcast })
     const container = document.createElement('div')
     root = createRoot(container)
 
@@ -308,7 +320,7 @@ describe('fresh Suspense requests', () => {
       root!.render(
         <QueryProvider query={instance}>
           <Suspense fallback="loading">
-            <Consumer instance={instance} resourceKey="/provider-fresh" />
+            <Consumer resourceKey="/provider-fresh" />
           </Suspense>
         </QueryProvider>
       )
@@ -317,5 +329,89 @@ describe('fresh Suspense requests', () => {
     await act(async () => requests[0]!.resolve('provided'))
     expect(container.textContent).toBe('provided')
     expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(instance.broadcast()).toBe(broadcast)
+    expect(broadcast.postMessage).toHaveBeenCalledTimes(1)
+    expect(add).toHaveBeenCalledTimes(1)
+    await act(async () => root!.unmount())
+    root = undefined
+    expect(remove).toHaveBeenCalledWith('message', add.mock.calls[0]![1])
+    expect(broadcast.close).not.toHaveBeenCalled()
+  })
+
+  it('keeps ordered mutation commits after an older fresh refresh resolves', async ({ expect }) => {
+    const { fetcher, requests } = createDelayedFetcher()
+    const instance = createQuery({ fetcher, fresh: true })
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => {
+      root!.render(
+        <Suspense fallback="loading">
+          <Consumer instance={instance} resourceKey="/mutated-fresh" />
+        </Suspense>
+      )
+    })
+    await act(async () => requests[0]!.resolve('initial'))
+
+    /** The background request remains pending while local mutations commit. */
+    let pending: Promise<unknown>
+    const mutation = Promise.withResolvers<string>()
+    await act(async () => {
+      pending = instance.query('/mutated-fresh', { fresh: true })
+      const first = instance.mutate('/mutated-fresh', () => mutation.promise)
+      const second = instance.mutate<string>('/mutated-fresh', (value) => `${value} second`)
+      mutation.resolve('first')
+      await Promise.all([first, second])
+    })
+    expect(container.textContent).toBe('first second')
+
+    await act(async () => {
+      requests[1]!.resolve('obsolete server value')
+      await pending
+    })
+    expect(container.textContent).toBe('first second')
+    await expect(instance.snapshot('/mutated-fresh')).resolves.toBe('first second')
+    expect(instance.resource('/mutated-fresh').promise).toBe(
+      instance.caches().items.get('/mutated-fresh')!.item
+    )
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps hydration and replacement ownership when a fresh refresh is aborted', async ({
+    expect,
+  }) => {
+    const { fetcher, requests } = createDelayedFetcher()
+    const instance = createQuery({ fetcher, fresh: true })
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => {
+      root!.render(
+        <Suspense fallback="loading">
+          <Consumer instance={instance} resourceKey="/hydrated-fresh" />
+        </Suspense>
+      )
+    })
+    await act(async () => requests[0]!.resolve('initial'))
+
+    const obsolete = instance.query('/hydrated-fresh', { fresh: true })
+    const rejected = expect(obsolete).rejects.toBeInstanceOf(DOMException)
+    await act(async () => instance.hydrate('/hydrated-fresh', 'hydrated'))
+    await expect(instance.snapshot('/hydrated-fresh')).resolves.toBe('hydrated')
+    await expect(instance.resource('/hydrated-fresh').promise).resolves.toBe('hydrated')
+
+    /** A new explicit refresh aborts the old request but owns a separate slot. */
+    const replacement = instance.query('/hydrated-fresh', { fresh: true })
+    await act(async () => {
+      requests[1]!.resolve('obsolete')
+      await rejected
+    })
+    await expect(instance.snapshot('/hydrated-fresh')).resolves.toBe('hydrated')
+    expect(instance.caches().resolvers.get('/hydrated-fresh')!.item).toBe(replacement)
+    await act(async () => {
+      requests[2]!.resolve('replacement')
+      await replacement
+    })
+    expect(container.textContent).toBe('replacement')
+    expect(instance.caches().items.get('/hydrated-fresh')!.item).toBe(replacement)
+    expect(fetcher).toHaveBeenCalledTimes(3)
   })
 })

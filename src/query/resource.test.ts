@@ -3,6 +3,24 @@ import { createQuery } from './query'
 import { type FetcherFunction } from './options'
 
 describe.concurrent('instance-owned fresh resources', () => {
+  it('keeps a hydrated resource when its superseded initial fetch completes', async ({
+    expect,
+  }) => {
+    /** The original caller still receives its result without publishing it. */
+    const pending = Promise.withResolvers<string>()
+    const instance = createQuery({ fetcher: () => pending.promise, fresh: true })
+    const resource = instance.resource('/hydrated-resource')
+    const original = resource.promise
+    instance.hydrate('/hydrated-resource', 'hydrated')
+    const hydrated = resource.promise
+    await expect(hydrated).resolves.toBe('hydrated')
+    pending.resolve('obsolete')
+    await expect(original).resolves.toBe('obsolete')
+    expect(resource.promise).toBe(hydrated)
+    expect(instance.caches().items.get('/hydrated-resource')!.item).toBe(hydrated)
+    expect(instance.keys('resolvers')).toEqual([])
+  })
+
   it('keeps the replacement resource and resolver after an obsolete request rejects', async ({
     expect,
   }) => {

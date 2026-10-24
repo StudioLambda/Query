@@ -27,13 +27,25 @@ export interface Configuration extends Options {
   readonly events?: EventTarget
 
   /**
-   * Broadcast channel. This is useful for communicating
-   * between tabs and windows (browser contexts).
+   * Opts into broadcasting full query event payloads between browser
+   * contexts. No channel is used by default, including in QueryProvider.
+   * Scope the name to the account, tenant, and session whose data may be
+   * shared. Channel names are routing, not an authorization boundary:
+   * other code on the same origin can subscribe to the same name.
    *
-   * By default it does not use any broadcast channel.
-   * If a broadcast channel is provided, query
-   * won't close automatically, therefore, the responsibility
-   * of closing the broadcast channel is up to the user.
+   * The caller owns the channel and must close it when all users are done.
+   * QueryProvider subscribes while mounted but never replaces or closes it.
+   * Without a provider, call query.subscribeBroadcast() to receive events.
+   *
+   * @example
+   * ```ts
+   * const channel = new BroadcastChannel('query:tenant-a:account-42:session-7')
+   * const query = createQuery({ broadcast: channel })
+   * const unsubscribe = query.subscribeBroadcast()
+   * query.hydrate('/user', { name: 'Alice' })
+   * unsubscribe()
+   * channel.close() // Only after all query users are done.
+   * ```
    */
   readonly broadcast?: BroadcastChannel
 }
