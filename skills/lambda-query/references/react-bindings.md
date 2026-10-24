@@ -35,14 +35,15 @@ function QueryProvider({
 }: QueryProviderProps): JSX.Element
 ```
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `query` | `Query` | `createQuery()` | Query instance (creates one if omitted) |
-| `clearOnForget` | `boolean` | `false` | Auto-refetch after `forget()` clears a key |
-| `ignoreTransitionContext` | `boolean` | `false` | Use local transitions instead of shared |
-| `children` | `ReactNode` | — | Child components |
+| Prop                      | Type        | Default         | Description                                |
+| ------------------------- | ----------- | --------------- | ------------------------------------------ |
+| `query`                   | `Query`     | `createQuery()` | Query instance (creates one if omitted)    |
+| `clearOnForget`           | `boolean`   | `false`         | Auto-refetch after `forget()` clears a key |
+| `ignoreTransitionContext` | `boolean`   | `false`         | Use local transitions instead of shared    |
+| `children`                | `ReactNode` | —               | Child components                           |
 
 **Behavior:**
+
 - Cross-tab sync is disabled unless the supplied query already has a channel.
 - Subscribes through `query.subscribeBroadcast()` in an effect; providers sharing a query share one incoming listener.
 - The final provider cleanup removes the listener, never closes the caller's channel.
@@ -153,25 +154,25 @@ The primary hook. Components using it **must** be inside `<Suspense>`. Composes 
 
 All core `Options<T>` fields (`expiration`, `fetcher`, `stale`, `removeOnError`, `fresh`) plus:
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `query` | `Query` | from context | Override query instance |
-| `clearOnForget` | `boolean` | from context | Auto-refetch after forget |
-| `ignoreTransitionContext` | `boolean` | from context | Use local transition |
+| Option                    | Type      | Default      | Description               |
+| ------------------------- | --------- | ------------ | ------------------------- |
+| `query`                   | `Query`   | from context | Override query instance   |
+| `clearOnForget`           | `boolean` | from context | Auto-refetch after forget |
+| `ignoreTransitionContext` | `boolean` | from context | Use local transition      |
 
 **Returns** (`Resource<T>`):
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `data` | `T` | Resolved data (always available — Suspense handles loading) |
-| `isPending` | `boolean` | Transition pending for mutations/refetches |
-| `expiresAt` | `Date` | When cached data expires |
-| `isExpired` | `boolean` | Whether data is stale (auto-updates via `setTimeout`) |
-| `isRefetching` | `boolean` | Background refetch in progress |
-| `isMutating` | `boolean` | Async mutation in progress |
-| `refetch` | `(options?: Options<T>) => Promise<T>` | Query with `stale: false`; pass `fresh: true` to force a fetch |
-| `mutate` | `(value: MutationValue<T>, options?: MutateOptions<T>) => Promise<T>` | Optimistic mutation |
-| `forget` | `() => Promise<void>` | Clear cached data for this key |
+| Property       | Type                                                                  | Description                                                    |
+| -------------- | --------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `data`         | `T`                                                                   | Resolved data (always available — Suspense handles loading)    |
+| `isPending`    | `boolean`                                                             | Transition pending for mutations/refetches                     |
+| `expiresAt`    | `Date`                                                                | When cached data expires                                       |
+| `isExpired`    | `boolean`                                                             | Whether data is stale (auto-updates via `setTimeout`)          |
+| `isRefetching` | `boolean`                                                             | Background refetch in progress                                 |
+| `isMutating`   | `boolean`                                                             | Async mutation in progress                                     |
+| `refetch`      | `(options?: Options<T>) => Promise<T>`                                | Query with `stale: false`; pass `fresh: true` to force a fetch |
+| `mutate`       | `(value: MutationValue<T>, options?: MutateOptions<T>) => Promise<T>` | Optimistic mutation                                            |
+| `forget`       | `() => Promise<void>`                                                 | Clear cached data for this key                                 |
 
 ```tsx
 function UserProfile() {
@@ -193,7 +194,10 @@ function UserProfile() {
 ### useQueryBasic
 
 ```tsx
-function useQueryBasic<T = unknown>(key: string, options?: BasicResourceOptions<T>): BasicResource<T>
+function useQueryBasic<T = unknown>(
+  key: string,
+  options?: BasicResourceOptions<T>
+): BasicResource<T>
 ```
 
 Minimal hook returning only `data` and `isPending`.
@@ -201,6 +205,7 @@ Minimal hook returning only `data` and `isPending`.
 **Returns:** `{ data: T, isPending: boolean }`
 
 **Implementation details:**
+
 1. Calls `resource<T>(key, opts)` on the query instance, then `use(promise)` (React 19) to suspend. An effect retains the committed resource and returns its release function.
 2. Subscribes to 6 events: `resolved`, `mutating`, `mutated`, `hydrated`, `refetching`, `forgotten`.
 3. All data updates wrapped in `startTransition` (shared or local based on `ignoreTransitionContext`).
@@ -221,18 +226,21 @@ const { data, isPending } = useQueryBasic<User>('/api/user/1')
 ### useQueryActions
 
 ```tsx
-function useQueryActions<T = unknown>(key: string, options?: QueryActionsOptions<T>): QueryActions<T>
+function useQueryActions<T = unknown>(
+  key: string,
+  options?: QueryActionsOptions<T>
+): QueryActions<T>
 ```
 
 Actions without data subscription. Does NOT re-render on data changes. Use for mutating/refetching from sibling components.
 
 **Returns:**
 
-| Method | Signature | Notes |
-|--------|-----------|-------|
-| `refetch` | `(options?: Options<T>) => Promise<T>` | Defaults `stale: false`; blocks on revalidation only when needed |
-| `mutate` | `(value: MutationValue<T>, options?) => Promise<T>` | Delegates to `query.mutate(key, ...)` |
-| `forget` | `() => Promise<void>` | Delegates to `query.forget(key)` |
+| Method    | Signature                                           | Notes                                                            |
+| --------- | --------------------------------------------------- | ---------------------------------------------------------------- |
+| `refetch` | `(options?: Options<T>) => Promise<T>`              | Defaults `stale: false`; blocks on revalidation only when needed |
+| `mutate`  | `(value: MutationValue<T>, options?) => Promise<T>` | Delegates to `query.mutate(key, ...)`                            |
+| `forget`  | `() => Promise<void>`                               | Delegates to `query.forget(key)`                                 |
 
 **Important**: `refetch()` defaults `stale` to `false`, overriding the instance default of `true` unless hook options override it. It reuses unexpired data and deduplicates eligible pending fetches. Use `refetch({ fresh: true })` to bypass the cache and abort pending work. Options passed to the action override hook options.
 
@@ -252,12 +260,12 @@ Status without data subscription.
 
 **Returns:**
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `expiresAt` | `Date` | Expiration time (initialized from cache or `new Date()`) |
-| `isExpired` | `boolean` | Auto-flips to `true` via `setTimeout` when expiration arrives |
-| `isRefetching` | `boolean` | Set on `refetching`, cleared on `resolved`/`error` |
-| `isMutating` | `boolean` | Set on `mutating`, cleared on `mutated`/`error` |
+| Property       | Type      | Description                                                   |
+| -------------- | --------- | ------------------------------------------------------------- |
+| `expiresAt`    | `Date`    | Expiration time (initialized from cache or `new Date()`)      |
+| `isExpired`    | `boolean` | Auto-flips to `true` via `setTimeout` when expiration arrives |
+| `isRefetching` | `boolean` | Set on `refetching`, cleared on `resolved`/`error`            |
+| `isMutating`   | `boolean` | Set on `mutating`, cleared on `mutated`/`error`               |
 
 Subscribes to 7 events: `mutating`, `mutated`, `hydrated`, `resolved`, `forgotten`, `refetching`, `error`.
 

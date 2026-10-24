@@ -76,7 +76,11 @@ describe.concurrent('fresh Suspense', function () {
 
     try {
       await act(async () => {
-        root.render(<Suspense fallback="loading"><Component /></Suspense>)
+        root.render(
+          <Suspense fallback="loading">
+            <Component />
+          </Suspense>
+        )
       })
       expect(container.textContent).toBe('loading')
       await act(async () => {
@@ -98,12 +102,12 @@ When using `query.next(key)`, register it before the triggering render/action. I
 
 Choose scenarios for the behavior being changed; do not add a new evaluation framework for a factual documentation update.
 
-| Change | Scenarios | Existing tests |
-| --- | --- | --- |
-| Request ownership | Abort old fetch, start replacement, settle old success/failure; replacement remains owner | `src/query/requestOwnership.test.ts` |
-| Mutation ordering | Two same-key functional updates; rejection recovery; independent keys; fetch superseded by mutation/hydration | `src/query/ordering.test.ts` |
-| Broadcast isolation | No implicit channel; scoped delivery; malformed/disallowed messages; shared provider listener; caller-owned close | `src/react/components/QueryProvider.broadcast.test.tsx` |
-| Background errors | Expired stale view survives failure/abort; action still rejects | `src/react/hooks/useQueryBasic.errors.test.tsx` |
-| Fresh Suspense | Initial retries, siblings, StrictMode, rerenders after expiration, final release/remount, invalidation, instance defaults | `src/react/hooks/useQueryFresh.test.tsx`, `src/query/resource.test.ts` |
+| Change              | Scenarios                                                                                                                 | Existing tests                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Request ownership   | Abort old fetch, start replacement, settle old success/failure; replacement remains owner                                 | `src/query/requestOwnership.test.ts`                                   |
+| Mutation ordering   | Two same-key functional updates; rejection recovery; independent keys; fetch superseded by mutation/hydration             | `src/query/ordering.test.ts`                                           |
+| Broadcast isolation | No implicit channel; scoped delivery; shared provider listener; caller-owned close                                        | `src/react/components/QueryProvider.broadcast.test.tsx`                |
+| Background errors   | Expired stale view survives failure/abort; action still rejects                                                           | `src/react/hooks/useQueryBasic.errors.test.tsx`                        |
+| Fresh Suspense      | Initial retries, siblings, StrictMode, rerenders after expiration, final release/remount, invalidation, instance defaults | `src/react/hooks/useQueryFresh.test.tsx`, `src/query/resource.test.ts` |
 
 Use test-context `expect` in concurrent suites. Keep mutable fixtures local; restore mocks, unsubscribe listeners, and close caller-created channels. Assert expected failures with `await expect(promise).rejects...` rather than swallowing errors. Check `package.json` for the current test/build commands.

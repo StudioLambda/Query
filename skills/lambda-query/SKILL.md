@@ -81,13 +81,13 @@ function UserProfile() {
 
 ## Configuration Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `expiration` | `(item: T) => number` | `() => 2000` | Cache duration in ms |
-| `fetcher` | `(key: string, { signal }) => Promise<T>` | `fetch`-based JSON | Data fetcher function |
-| `stale` | `boolean` | `true` | Return stale data while revalidating |
-| `removeOnError` | `boolean` | `false` | Remove cached item on fetch error |
-| `fresh` | `boolean` | `false` | Always bypass cache and abort pending |
+| Option          | Type                                      | Default            | Description                           |
+| --------------- | ----------------------------------------- | ------------------ | ------------------------------------- |
+| `expiration`    | `(item: T) => number`                     | `() => 2000`       | Cache duration in ms                  |
+| `fetcher`       | `(key: string, { signal }) => Promise<T>` | `fetch`-based JSON | Data fetcher function                 |
+| `stale`         | `boolean`                                 | `true`             | Return stale data while revalidating  |
+| `removeOnError` | `boolean`                                 | `false`            | Remove cached item on fetch error     |
+| `fresh`         | `boolean`                                 | `false`            | Always bypass cache and abort pending |
 
 Instance-only: `itemsCache`, `resolversCache` (injectable `Cache<T>` interface), `events` (EventTarget), `broadcast` (BroadcastChannel). `fresh` forces each imperative `query()` call; React uses `Query.resource()` to share a fresh request across Suspense retries and committed same-key consumers.
 

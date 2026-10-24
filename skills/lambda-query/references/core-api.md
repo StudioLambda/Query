@@ -99,6 +99,8 @@ try {
 
 `resource<T>(key, options?)` returns `{ promise: Promise<T>, retain: () => Unsubscriber }`. This is the framework-neutral lifecycle API used by React; ordinary imperative callers should use `query()`.
 
+Migration: `createQuery()` callers need no API changes. Hand-written implementations or test doubles of the exported `Query` interface must now implement `resource` too.
+
 - Non-fresh reads delegate to `query()`; retention and cleanup are no-ops.
 - Fresh reads select one instance-owned request per key. Suspense retries and sibling consumers share it, including after expiration; the first reader selects request options for that lifetime.
 - Call `retain()` for each committed consumer and call its returned release function exactly once on cleanup. The final release evicts the selection on the next microtask, so synchronous StrictMode reconnection reuses it. A later mount starts fresh again.
@@ -114,14 +116,11 @@ Source checks: `src/query/query.ts`, `src/query/options.ts`, `src/query/resource
 ## Mutations
 
 ```typescript
-function mutate<T>(
-  key: string,
-  resolver: MutationValue<T>,
-  options?: MutateOptions<T>,
-): Promise<T>
+function mutate<T>(key: string, resolver: MutationValue<T>, options?: MutateOptions<T>): Promise<T>
 ```
 
 `resolver` can be:
+
 - A direct value `T`
 - A sync function `(previous?: T, expiresAt?: Date) => T`
 - An async function `(previous?: T, expiresAt?: Date) => Promise<T>`
@@ -144,7 +143,7 @@ await query.mutate('/api/user', updatedUser)
 await query.mutate<Post[]>('/api/posts', (previous) => [...(previous ?? []), newPost])
 
 // Async mutation
-await query.mutate('/api/posts', async (previous) => {
+await query.mutate<Post[]>('/api/posts', async (previous) => {
   const post = await createNewPost()
   return [...(previous ?? []), post]
 })
@@ -174,10 +173,10 @@ Removes items and matching fresh resource selections — does **not** cancel pen
 Handles rejected cached promises gracefully — emits `'forgotten'` with `undefined` for those keys and continues processing remaining keys.
 
 ```typescript
-await query.forget('/api/user')                   // Single key
-await query.forget(['/api/user', '/api/posts'])    // Multiple keys
-await query.forget(/^\/api\/users(.*)/)            // Regex pattern
-await query.forget()                               // All keys
+await query.forget('/api/user') // Single key
+await query.forget(['/api/user', '/api/posts']) // Multiple keys
+await query.forget(/^\/api\/users(.*)/) // Regex pattern
+await query.forget() // All keys
 ```
 
 ---
@@ -185,11 +184,7 @@ await query.forget()                               // All keys
 ## Hydrate (Pre-populate Cache)
 
 ```typescript
-function hydrate<T>(
-  keys: string | readonly string[],
-  item: T,
-  options?: HydrateOptions<T>,
-): void
+function hydrate<T>(keys: string | readonly string[], item: T, options?: HydrateOptions<T>): void
 ```
 
 Synchronous. Wraps `item` in `Promise.resolve()` and stores in cache.
@@ -212,10 +207,10 @@ function abort(keys?: string | readonly string[], reason?: unknown): void
 Calls `controller.abort(reason)` on in-flight fetches and removes them from `resolversCache`.
 
 ```typescript
-query.abort('/api/user')                       // Single key
-query.abort(['/api/user', '/api/posts'])        // Multiple keys
-query.abort()                                   // All pending
-query.abort('/api/user', 'cancelled')           // Custom reason
+query.abort('/api/user') // Single key
+query.abort(['/api/user', '/api/posts']) // Multiple keys
+query.abort() // All pending
+query.abort('/api/user', 'cancelled') // Custom reason
 ```
 
 ---
@@ -227,11 +222,11 @@ query.abort('/api/user', 'cancelled')           // Custom reason
 const value = await query.snapshot<User>('/api/user')
 
 // Cache keys
-const itemKeys = query.keys('items')         // readonly string[]
+const itemKeys = query.keys('items') // readonly string[]
 const resolverKeys = query.keys('resolvers') // readonly string[]
 
 // Expiration date for a cached item
-const date = query.expiration('/api/user')   // Date | undefined
+const date = query.expiration('/api/user') // Date | undefined
 ```
 
 ---
@@ -256,16 +251,16 @@ query.configure({ expiration: () => 10000, stale: false })
 
 ### Event Types
 
-| Event | Detail | Broadcast | Description |
-|-------|--------|-----------|-------------|
-| `refetching` | `Promise<T>` | No | Fetch started |
-| `resolved` | `T` | Yes | Fetch completed |
-| `mutating` | `Promise<T>` | No | Mutation started |
-| `mutated` | `T` | Yes | Mutation completed |
-| `aborted` | `unknown` (reason) | No | Fetch cancelled |
-| `forgotten` | `T \| undefined` | Yes | Cache cleared |
-| `hydrated` | `T` | Yes | Cache pre-populated |
-| `error` | `unknown` | No | Fetch error |
+| Event        | Detail             | Broadcast | Description         |
+| ------------ | ------------------ | --------- | ------------------- |
+| `refetching` | `Promise<T>`       | No        | Fetch started       |
+| `resolved`   | `T`                | Yes       | Fetch completed     |
+| `mutating`   | `Promise<T>`       | No        | Mutation started    |
+| `mutated`    | `T`                | Yes       | Mutation completed  |
+| `aborted`    | `unknown` (reason) | No        | Fetch cancelled     |
+| `forgotten`  | `T \| undefined`   | Yes       | Cache cleared       |
+| `hydrated`   | `T`                | Yes       | Cache pre-populated |
+| `error`      | `unknown`          | No        | Fetch error         |
 
 ### subscribe
 
@@ -273,7 +268,7 @@ query.configure({ expiration: () => 10000, stale: false })
 function subscribe<T>(
   key: string,
   event: QueryEvent,
-  listener: (event: CustomEventInit<T>) => void,
+  listener: (event: CustomEventInit<T>) => void
 ): Unsubscriber
 ```
 
@@ -289,11 +284,7 @@ unsub()
 ### once
 
 ```typescript
-function once<T>(
-  key: string,
-  event: QueryEvent,
-  signal?: AbortSignal,
-): Promise<CustomEventInit<T>>
+function once<T>(key: string, event: QueryEvent, signal?: AbortSignal): Promise<CustomEventInit<T>>
 ```
 
 Resolves on first event, auto-unsubscribes. Supports `AbortSignal` for cancellation (rejects with `signal.reason`). Handles already-aborted signals.
@@ -330,7 +321,7 @@ const obj = await query.next<{ user: User }>({ user: '/api/user' })
 function stream<T>(keys: string | readonly string[] | Record<string, string>): AsyncGenerator<T>
 ```
 
-Infinite async generator yielding `next()` results. Its `finally` block aborts internal listeners when the generator exits. Calling `.return()` queues behind a pending `.next()`; it does not interrupt that pending event wait. For externally cancellable waits, use `next(keys, signal)` directly.
+Infinite async generator yielding `next()` results. Its `finally` block aborts internal listeners when the generator exits. Calling `.return()` queues behind a pending `.next()`; it does not interrupt that pending event wait. Use `next(keys, signal)` to cancel the event-listener wait directly; its signal does not cancel a fetch promise already received in the event detail.
 
 ```typescript
 for await (const value of query.stream<User>('/api/user')) {
@@ -360,7 +351,7 @@ for await (const event of query.sequence<User>('/api/user', 'resolved')) {
 function subscribeBroadcast(): Unsubscriber
 ```
 
-Listens on the explicitly configured `BroadcastChannel` and replays accepted events into the local `EventTarget`. Captures the channel reference at call time, so cleanup still removes the original listener after `configure()` replacement. Replay is event delivery, not a write into the receiving instance's item cache, and is not rebroadcast.
+Listens on the explicitly configured `BroadcastChannel` and replays received events into the local `EventTarget`. Captures the channel reference at call time, so cleanup still removes the original listener after `configure()` replacement. Replay is event delivery, not a write into the receiving instance's item cache, and is not rebroadcast. Incoming `{ event, detail }` payloads are trusted without runtime validation or an event allowlist.
 
 Broadcast silently catches `DataCloneError` for non-structurally-cloneable payloads.
 
@@ -376,7 +367,7 @@ channel.close() // Caller owns it; close only after every user has detached.
 
 `QueryProvider` subscribes to an already configured channel and shares one incoming listener between providers using the same query. It creates no channel and never closes one. In SSR or runtimes without `BroadcastChannel`, omit this setup.
 
-Migration: replace reliance on the old implicit global `'query'` channel with an explicitly scoped channel on the supplied query. Channel names are routing labels that prevent accidental cross-talk, not security boundaries or authentication: other same-origin participants knowing the name can send and receive data. Send only cloneable data appropriate for those participants.
+Migration: replace reliance on the old implicit global `'query'` channel with an explicitly scoped channel on the supplied query. Channel names are routing labels that prevent accidental cross-talk, not security boundaries or authentication: other same-origin participants knowing the name can send and receive data. Broadcasts include full event data, even for `forgotten`. Create a new query/channel on account, tenant, or session changes, and reload old tabs that still use the implicit global channel. Send only cloneable data appropriate for those participants.
 
 ---
 
@@ -384,8 +375,14 @@ Migration: replace reliance on the old implicit global `'query'` channel with an
 
 ```typescript
 type QueryEvent =
-  | 'refetching' | 'resolved' | 'mutating' | 'mutated'
-  | 'aborted' | 'forgotten' | 'hydrated' | 'error'
+  | 'refetching'
+  | 'resolved'
+  | 'mutating'
+  | 'mutated'
+  | 'aborted'
+  | 'forgotten'
+  | 'hydrated'
+  | 'error'
 
 type FetcherFunction<T> = (key: string, additional: FetcherAdditional) => Promise<T>
 
