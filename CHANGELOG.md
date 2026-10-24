@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.0.1] - 2026-10-24
+
+### 📚 Documentation
+
+- Refresh agent guidance for query lifecycle fixes
+- Verify skill references against merged runtime
 ## [3.0.0] - 2026-10-24
 
 ### 🐛 Bug Fixes
@@ -14,6 +20,7 @@
 
 - Merge main into fresh Suspense fix
 - Merge mutation ordering and broadcast isolation
+- *(release)* V3.0.0
 ## [2.0.0] - 2026-10-24
 
 ### 🐛 Bug Fixes
