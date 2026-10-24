@@ -1,10 +1,19 @@
 # Changelog
 
+## [3.0.3] - 2026-10-24
+
+### ⚙️ Miscellaneous Tasks
+
+- Update development dependencies and Node.js
 ## [3.0.2] - 2026-10-24
 
 ### 📚 Documentation
 
 - Document all source APIs with checked examples
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V3.0.2
 ## [3.0.1] - 2026-10-24
 
 ### 📚 Documentation
