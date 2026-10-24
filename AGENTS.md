@@ -207,7 +207,7 @@ The project uses a single GitHub Actions workflow (`main.yml`) with three jobs:
 2. **build** — verifies the build succeeds (depends on check)
 3. **release** — version bump, changelog, npm publish, GitHub Release (depends on build, only on push to main)
 
-The `build` job does not verify the build on PRs — only the `release` job builds before publishing. The separate `build` job exists as an early CI gate so build failures are caught before the release job runs. The release job builds again from scratch because GitHub Actions jobs don't share artifacts between runners.
+The `build` job verifies PRs and pushes after `check` passes. The release job builds again from scratch before publishing because GitHub Actions jobs don't share artifacts between runners.
 
 `npm publish` uses `--ignore-scripts` to avoid double-building (the release job already ran `build:only` before publishing, so `prepack` is unnecessary).
 
@@ -215,5 +215,9 @@ The `build` job does not verify the build on PRs — only the `release` job buil
 
 - Node.js 25+ (see `.nvmrc`)
 - npm 11+ (package manager)
-- TypeScript ~5.9.3
+- TypeScript version: see `package.json` (currently ~6.0.3)
 - React 19.2+ (peer dependency)
+
+## Library API Guidance
+
+When changing library behavior or writing consumer examples, read `skills/lambda-query/SKILL.md` and its relevant core, React, or testing reference. These cover request ownership, serialized mutations, explicit broadcast isolation, and fresh Suspense resource lifetimes.
