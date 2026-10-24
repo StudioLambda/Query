@@ -130,6 +130,52 @@ export type QueryFunction = {
 }
 
 /**
+ * A render-safe request selected by {@link Query.resource}. Fresh requests
+ * are shared by key within one instance, including across Suspense retries.
+ * Retain only after a consumer commits; release exactly once on cleanup.
+ *
+ * @example
+ * ```ts
+ * const instance = createQuery({ fetcher: async () => 'hello' })
+ * const request = instance.resource<string>('/hello', { fresh: true })
+ * const release = request.retain()
+ * try { console.log(await request.promise) } finally { release() }
+ * ```
+ */
+export interface QueryResource<T = unknown> {
+  /**
+   * The selected request. Initial readers follow pending replacements;
+   * retained consumers keep the last successful request until a refresh
+   * succeeds. Successful mutations and hydration update it too. Initial
+   * errors reject as they do for ordinary queries.
+   *
+   * @example
+   * ```ts
+   * const instance = createQuery({ fetcher: async () => 'hello' })
+   * const request = instance.resource<string>('/hello')
+   * try { console.log(await request.promise) } catch (error) { console.error(error) }
+   * ```
+   */
+  readonly promise: Promise<T>
+
+  /**
+   * Marks a committed consumer as active and returns its cleanup function.
+   * The last release evicts a fresh request on the next microtask, allowing
+   * synchronous effect reconnection without starting another request.
+   * Ordinary cached requests need no retention, so their cleanup is a no-op.
+   *
+   * @example
+   * ```ts
+   * const instance = createQuery({ fetcher: async () => 'hello' })
+   * const request = instance.resource('/hello', { fresh: true })
+   * const release = request.retain()
+   * release() // Call once when this consumer stops using the resource.
+   * ```
+   */
+  readonly retain: () => Unsubscriber
+}
+
+/**
  * Function type that calculates the expiration time in milliseconds
  * for a cached item based on its value.
  *
@@ -271,12 +317,28 @@ export type ForgetFunction = {
 }
 
 /**
- * Represents the methods a query
- * should implement.
+ * An isolated async-data instance. Imperative queries use cache policy on
+ * every call; render resources can share a fresh request across retries and
+ * committed sibling consumers. Obtain an implementation from createQuery().
+ *
+ * @example
+ * ```ts
+ * const instance: Query = createQuery({ fetcher: async () => 'hello' })
+ * try { console.log(await instance.query<string>('/hello')) }
+ * catch (error) { console.error(error) }
+ * ```
  */
 export interface Query {
   /**
-   * Configures the current instance of query.
+   * Updates supplied defaults. Request/cache options invalidate fresh
+   * selections; changing only events/broadcast preserves them. Existing
+   * promises/transports remain active; ordinary cached items remain.
+   *
+   * @example
+   * ```ts
+   * const instance = createQuery({ fetcher: async () => 'hello' })
+   * instance.configure({ fresh: true })
+   * ```
    */
   readonly configure: ConfigureFunction
 
@@ -285,6 +347,28 @@ export interface Query {
    * The returned promise contains the result item.
    */
   readonly query: QueryFunction
+
+  /**
+   * Selects a request for a render consumer. Ordinary requests keep query's
+   * cache/expiration behavior. With effective fresh: true, the first read
+   * bypasses the cache; retries and same-key fresh consumers share that
+   * request until the last retained consumer releases it. Uncommitted reads
+   * remain available until forget, request/cache reconfiguration or disposal.
+   * Query options are selected by the first fresh read, not by each sibling.
+   * Explicit query calls remain independent and can force a new request.
+   * Rejected selections are retained too: forget the key or explicitly
+   * refresh it before retrying an error boundary. Cache events remain the
+   * notification mechanism; the resource itself does not subscribe consumers.
+   *
+   * @example
+   * ```ts
+   * const instance = createQuery({ fetcher: async () => 'hello' })
+   * const request = instance.resource<string>('/hello', { fresh: true })
+   * const release = request.retain()
+   * try { console.log(await request.promise) } finally { release() }
+   * ```
+   */
+  readonly resource: <T = unknown>(key: string, options?: Options<T>) => QueryResource<T>
 
   /**
    * Emit is able to send events to active subscribers
@@ -324,8 +408,15 @@ export interface Query {
   readonly abort: AbortFunction
 
   /**
-   * Forgets the given keys from the items cache.
-   * Does not remove any resolvers.
+   * Forgets items and fresh render selections for matching keys, including
+   * selections from abandoned pending renders. Does not abort transports.
+   * Omit keys to forget all, or pass a string, list or regular expression.
+   *
+   * @example
+   * ```ts
+   * const instance = createQuery({ fetcher: async () => 'hello' })
+   * await instance.forget('/hello')
+   * ```
    */
   readonly forget: ForgetFunction
 
