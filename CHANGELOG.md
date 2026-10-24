@@ -1,11 +1,20 @@
 # Changelog
 
+## [3.0.2] - 2026-10-24
+
+### 📚 Documentation
+
+- Document all source APIs with checked examples
 ## [3.0.1] - 2026-10-24
 
 ### 📚 Documentation
 
 - Refresh agent guidance for query lifecycle fixes
 - Verify skill references against merged runtime
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V3.0.1
 ## [3.0.0] - 2026-10-24
 
 ### 🐛 Bug Fixes
