@@ -5,15 +5,14 @@ description: >
   management library. Use when writing, editing, reviewing, or testing code that uses
   createQuery, useQuery, QueryProvider, cache mutations, hydration, event subscriptions,
   or any @studiolambda/query API. Covers the core framework-agnostic library and
-  React 19+ bindings (hooks and components).
+  React 19.2+ bindings (hooks and components).
 metadata:
-  version: '1.5.12'
   author: studiolambda
 ---
 
 # @studiolambda/query
 
-Lightweight (~1.7KB), isomorphic, framework-agnostic SWR-style async data management library with React 19+ bindings.
+Isomorphic, framework-agnostic SWR-style async data management library with React 19.2+ bindings.
 
 **Install:** `npm i @studiolambda/query`
 
@@ -24,7 +23,9 @@ Lightweight (~1.7KB), isomorphic, framework-agnostic SWR-style async data manage
 
 ## How It Works
 
-`createQuery()` returns a closure-scoped `Query` instance with two internal caches: **items** (resolved data + expiration) and **resolvers** (in-flight promises + AbortControllers). Fetches are deduplicated — concurrent `query(key)` calls return the same promise. Expired items return stale data immediately while revalidating in the background (SWR pattern, configurable via `stale` option). An `EventTarget` powers subscriptions, and an optional `BroadcastChannel` syncs mutations across tabs.
+`createQuery()` owns **items** (data promises + expiration), **resolvers** (in-flight fetches + AbortControllers), and fresh render-resource lifetimes. Ordinary fetches deduplicate per key; expired data can be returned while revalidating (`stale: true`). Only the current request owner may publish cache writes and completion events. Same-key mutations commit in call order. An `EventTarget` powers subscriptions; cross-tab event delivery requires an explicitly configured, caller-owned `BroadcastChannel`.
+
+For repository changes, read the implementation and regression tests for the affected path before editing. Check `package.json` for current commands and versions. Use the references below for API behavior and migration caveats rather than assuming that an action named `refetch` forces a network request.
 
 ## Quick Start
 
@@ -72,7 +73,7 @@ function UserProfile() {
   return (
     <div style={{ opacity: isPending ? 0.5 : 1 }}>
       <h1>{data.name}</h1>
-      <button onClick={() => refetch()}>Refresh</button>
+      <button onClick={() => refetch({ fresh: true })}>Refresh</button>
     </div>
   )
 }
@@ -80,15 +81,15 @@ function UserProfile() {
 
 ## Configuration Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `expiration` | `(item: T) => number` | `() => 2000` | Cache duration in ms |
-| `fetcher` | `(key: string, { signal }) => Promise<T>` | `fetch`-based JSON | Data fetcher function |
-| `stale` | `boolean` | `true` | Return stale data while revalidating |
-| `removeOnError` | `boolean` | `false` | Remove cached item on fetch error |
-| `fresh` | `boolean` | `false` | Always bypass cache and abort pending |
+| Option          | Type                                      | Default            | Description                           |
+| --------------- | ----------------------------------------- | ------------------ | ------------------------------------- |
+| `expiration`    | `(item: T) => number`                     | `() => 2000`       | Cache duration in ms                  |
+| `fetcher`       | `(key: string, { signal }) => Promise<T>` | `fetch`-based JSON | Data fetcher function                 |
+| `stale`         | `boolean`                                 | `true`             | Return stale data while revalidating  |
+| `removeOnError` | `boolean`                                 | `false`            | Remove cached item on fetch error     |
+| `fresh`         | `boolean`                                 | `false`            | Always bypass cache and abort pending |
 
-Instance-only: `itemsCache`, `resolversCache` (injectable `Cache<T>` interface), `events` (EventTarget), `broadcast` (BroadcastChannel).
+Instance-only: `itemsCache`, `resolversCache` (injectable `Cache<T>` interface), `events` (EventTarget), `broadcast` (BroadcastChannel). `fresh` forces each imperative `query()` call; React uses `Query.resource()` to share a fresh request across Suspense retries and committed same-key consumers.
 
 ## Events
 
@@ -100,14 +101,17 @@ Only `mutated`, `resolved`, `hydrated`, and `forgotten` are broadcast cross-tab.
 
 - **Expiration is a function, not a number.** Always `expiration: () => 5000`, not `expiration: 5000`.
 - **Mutated/hydrated items default to 0ms expiration** — immediately stale unless you pass a custom `expiration`.
-- **`configure()` uses `??` internally** — you cannot reset a value to `undefined`/`null`/`false`/`0`.
+- **`configure()` uses `??` internally** — nullish values keep the previous setting. `false` and expiration functions returning `0` are valid overrides.
 - **`useQuery` suspends.** Components must be inside `<Suspense>`.
-- **`data` from `useQuery` is always resolved.** Never undefined/null from loading state.
+- **`data` from `useQuery` is resolved.** Suspense handles loading, but a fetcher may itself resolve `null` or `undefined`.
 - **`forget` does not cancel pending fetches.** Use `abort` to cancel in-flight requests.
-- **`fresh: true` aborts then refetches.** Ensures a genuinely new fetch.
-- **`subscribe('refetching')` fires immediately** if a resolver is already in-flight for that key.
-- **`refetch()` from `useQueryActions` defaults `stale: false`** — it blocks on fresh data, unlike the instance default.
-- **`QueryProvider` auto-creates a `BroadcastChannel('query')`** — all providers share the same channel name.
+- **Imperative `query(..., { fresh: true })` aborts then refetches.** React resource reads instead share a fresh consumer lifetime.
+- **`subscribe(key, 'refetching', listener)` queues notification in a microtask** if a resolver is already in-flight for that key.
+- **`refetch()` defaults `stale: false`, not `fresh: true`.** Unexpired cached data is reused; use `refetch({ fresh: true })` to force a request.
+- **Cross-tab sync is opt-in.** Scope caller-created channel names to the application, tenant, and session. Providers subscribe but never create or close channels.
+- **Failed background refetches preserve rendered stale data.** Observe the instance `error` event; blocking initial reads and explicit action promises still reject.
+- **Same-key mutation resolvers run serially.** A rejection preserves the last committed item and does not poison later mutations. Never await another same-key mutation inside its resolver: it queues behind itself.
+- **Mutation/hydration commits supersede older fetches.** Those callers still settle, but obsolete fetches cannot overwrite local data or emit completion errors; later revalidation need not wait for them.
 - **Broadcast silently swallows `DataCloneError`** for non-structurally-cloneable payloads.
 - **Pass stable `keys` arrays to `useQueryPrefetch` / `QueryPrefetch`.** Unstable references re-trigger prefetching.
 - **React Compiler handles memoization.** Do NOT use `useMemo`, `useCallback`, or `React.memo`.

@@ -1,268 +1,113 @@
 # Testing Patterns
 
-## Table of Contents
+Use Vitest with happy-dom. Read adjacent regression tests before extending an affected path. Tests import source through the repository's `query:` aliases; consumer examples use the published `@studiolambda/query` paths.
 
-- [Test Setup](#test-setup)
-- [Testing Core Query](#testing-core-query)
-- [Testing React Components](#testing-react-components)
-- [Common Patterns](#common-patterns)
-- [Gotchas](#gotchas)
+## Core: deterministic overlap
 
----
-
-## Test Setup
-
-- Framework: Vitest with `happy-dom` environment
-- Use `describe.concurrent()` for parallel test execution
-- Destructure `expect` from test context: `it('...', async ({ expect }) => { ... })`
-- React tests use `act()` and `createRoot` (not `render` from testing-library)
+Control pending work with `Promise.withResolvers()` rather than real sleeps. Assert caller results, cache contents, events, and resolver ownership separately: an obsolete caller settling is not evidence that it may publish.
 
 ```typescript
 import { describe, it, vi } from 'vitest'
-import { createQuery } from '@studiolambda/query'
-```
+import { createQuery } from 'query:index'
 
----
-
-## Testing Core Query
-
-Create a query instance with a mock fetcher and exercise methods directly.
-
-```typescript
-describe.concurrent('query', function () {
-  it('can query resources', async ({ expect }) => {
-    function fetcher(key: string) {
-      return Promise.resolve(key)
-    }
-
-    const { query } = createQuery({ fetcher })
-
-    const result = await query<string>('example-key')
-    expect(result).toBe('example-key')
-  })
-
-  it('deduplicates in-flight requests', async ({ expect }) => {
-    let times = 0
-
-    function fetcher() {
-      times++
-      return new Promise(function (resolve) {
-        setTimeout(function () {
-          resolve('done')
-        }, 50)
-      })
-    }
-
-    const { query } = createQuery({ fetcher })
-
-    const [a, b] = await Promise.all([
-      query<string>('key'),
-      query<string>('key'),
-    ])
-
-    expect(a).toBe('done')
-    expect(b).toBe('done')
-    expect(times).toBe(1)
-  })
-
-  it('returns stale data while revalidating', async ({ expect }) => {
-    function fetcher() {
-      return Promise.resolve('example')
-    }
-
-    const { query } = createQuery({ fetcher, expiration: () => 100 })
-
-    await query<string>('key')
-    await new Promise((r) => setTimeout(r, 100))
-
-    // Returns stale data immediately (default stale: true)
-    const resource = await query<string>('key')
-    expect(resource).toBe('example')
-  })
-
-  it('can mutate cached data', async ({ expect }) => {
-    function fetcher() {
-      return Promise.resolve('original')
-    }
-
-    const q = createQuery({ fetcher })
-
-    await q.query<string>('key')
-    await q.mutate('key', 'updated')
-
-    const value = await q.snapshot<string>('key')
-    expect(value).toBe('updated')
-  })
-
-  it('can subscribe to events', async ({ expect }) => {
-    const fetcher = vi.fn().mockResolvedValue('data')
-    const q = createQuery({ fetcher })
-
-    const values: string[] = []
-    q.subscribe<string>('key', 'resolved', function (event) {
-      values.push(event.detail!)
+describe.concurrent('mutation ordering', function () {
+  it('serializes same-key functional mutations', async ({ expect }) => {
+    const client = createQuery()
+    client.hydrate('count', 0)
+    const gate = Promise.withResolvers<void>()
+    const first = client.mutate<number>('count', async (previous) => {
+      await gate.promise
+      return (previous ?? 0) + 1
     })
+    const second = client.mutate<number>('count', (previous) => (previous ?? 0) + 1)
 
-    await q.query<string>('key')
-    expect(values).toEqual(['data'])
+    gate.resolve()
+    expect(await Promise.all([first, second])).toEqual([1, 2])
+    expect(await client.snapshot('count')).toBe(2)
+  })
+
+  it('does not publish a fetch superseded by hydration', async ({ expect }) => {
+    const pending = Promise.withResolvers<string>()
+    const client = createQuery({ fetcher: () => pending.promise })
+    const resolved = vi.fn()
+    const unsubscribe = client.subscribe('key', 'resolved', resolved)
+    const request = client.query('key')
+
+    client.hydrate('key', 'local')
+    pending.resolve('remote')
+    expect(await request).toBe('remote')
+    expect(await client.snapshot('key')).toBe('local')
+    expect(resolved).not.toHaveBeenCalled()
+    unsubscribe()
   })
 })
 ```
 
----
+For immediately stale data, hydrate with the default zero lifetime; the next ordinary query starts revalidation immediately. For valid cached data, use a long explicit expiration. Use controlled time only when testing the timer itself. Tests using global fake timers or global `BroadcastChannel` substitutes should run in a sequential suite and restore globals in cleanup.
 
-## Testing React Components
+## React: render, settle, clean up
 
-**Pattern**: Create query with mock fetcher, pass via `{ query }` option to bypass context, use `query.next(key)` to await resolution.
+Use `act()` and `createRoot`, and always unmount roots. A query option bypasses the need for a provider when testing an isolated hook. Include a provider when testing broadcast ownership or context behavior.
 
 ```tsx
 import { describe, it } from 'vitest'
-import { createQuery } from '@studiolambda/query'
-import { useQuery } from '@studiolambda/query/react'
 import { act, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
+import { createQuery } from 'query:index'
+import { useQuery } from 'query/react:hooks/useQuery'
 
-describe.concurrent('useQuery', function () {
-  it('can query data', async ({ expect }) => {
-    function fetcher() {
-      return Promise.resolve('works')
-    }
-
-    const query = createQuery({ fetcher })
-    const options = { query }
-
+describe.concurrent('fresh Suspense', function () {
+  it('shares a fresh request across initial retries', async ({ expect }) => {
+    const pending = Promise.withResolvers<string>()
+    let calls = 0
+    const query = createQuery({
+      fetcher: () => {
+        calls += 1
+        return pending.promise
+      },
+      fresh: true,
+    })
     function Component() {
-      const { data } = useQuery<string>('/user', options)
-      return data
+      const { data } = useQuery<string>('key', { query })
+      return <span>{data}</span>
     }
-
     const container = document.createElement('div')
-    const promise = query.next<string>('/user')
+    const root = createRoot(container)
 
-    // oxlint-disable-next-line
-    await act(async function () {
-      createRoot(container).render(
-        <Suspense fallback="loading">
-          <Component />
-        </Suspense>
-      )
-    })
-
-    await act(async function () {
-      const result = await promise
-      expect(result).toBe('works')
-    })
-
-    expect(container.innerText).toBe('works')
+    try {
+      await act(async () => {
+        root.render(
+          <Suspense fallback="loading">
+            <Component />
+          </Suspense>
+        )
+      })
+      expect(container.textContent).toBe('loading')
+      await act(async () => {
+        pending.resolve('ready')
+        await pending.promise
+      })
+      expect(container.textContent).toBe('ready')
+      expect(calls).toBe(1)
+    } finally {
+      await act(async () => root.unmount())
+    }
   })
 })
 ```
 
-### Step-by-step breakdown
+When using `query.next(key)`, register it before the triggering render/action. It listens for `refetching`, not a generic cache update: mutations, hydration, and unexpired cache hits need their own synchronization. Catch expected action rejections inside `act()`; separately assert the instance's `error` event and stale rendered data. Use an error boundary when asserting initial blocking failures.
 
-1. **Create a mock fetcher** returning a resolved promise.
-2. **Create a query instance** with the mock fetcher.
-3. **Pass `{ query }` as options** to the hook — bypasses `QueryProvider` context.
-4. **Call `query.next(key)` before rendering** — captures a promise that resolves when the query completes.
-5. **Render inside `act()` + `<Suspense>`** — required because `useQuery` suspends.
-6. **Await the `next()` promise inside a second `act()`** — ensures React processes the state update.
-7. **Assert on `container.innerText`** — the rendered output.
+## Regression checklist
 
----
+Choose scenarios for the behavior being changed; do not add a new evaluation framework for a factual documentation update.
 
-## Common Patterns
+| Change              | Scenarios                                                                                                                 | Existing tests                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Request ownership   | Abort old fetch, start replacement, settle old success/failure; replacement remains owner                                 | `src/query/requestOwnership.test.ts`                                   |
+| Mutation ordering   | Two same-key functional updates; rejection recovery; independent keys; fetch superseded by mutation/hydration             | `src/query/ordering.test.ts`                                           |
+| Broadcast isolation | No implicit channel; scoped delivery; shared provider listener; caller-owned close                                        | `src/react/components/QueryProvider.broadcast.test.tsx`                |
+| Background errors   | Expired stale view survives failure/abort; action still rejects                                                           | `src/react/hooks/useQueryBasic.errors.test.tsx`                        |
+| Fresh Suspense      | Initial retries, siblings, StrictMode, rerenders after expiration, final release/remount, invalidation, instance defaults | `src/react/hooks/useQueryFresh.test.tsx`, `src/query/resource.test.ts` |
 
-### Testing mutations
-
-```tsx
-it('can mutate data', async ({ expect }) => {
-  let value = 'initial'
-
-  function fetcher() {
-    return Promise.resolve(value)
-  }
-
-  const query = createQuery({ fetcher })
-
-  function Component() {
-    const { data, mutate } = useQuery<string>('/key', { query })
-    return (
-      <div>
-        <span>{data}</span>
-        <button onClick={() => mutate('updated')}>Update</button>
-      </div>
-    )
-  }
-
-  const container = document.createElement('div')
-  const promise = query.next<string>('/key')
-
-  await act(async function () {
-    createRoot(container).render(
-      <Suspense fallback="loading">
-        <Component />
-      </Suspense>
-    )
-  })
-
-  await act(async function () {
-    await promise
-  })
-
-  expect(container.querySelector('span')!.textContent).toBe('initial')
-
-  // Trigger mutation
-  await act(async function () {
-    container.querySelector('button')!.click()
-  })
-})
-```
-
-### Testing with delayed fetchers
-
-```typescript
-function delayedFetcher<T>(value: T, ms: number) {
-  return function () {
-    return new Promise<T>(function (resolve) {
-      setTimeout(function () {
-        resolve(value)
-      }, ms)
-    })
-  }
-}
-```
-
-### Testing error handling
-
-```typescript
-it('emits error event on fetch failure', async ({ expect }) => {
-  function fetcher() {
-    return Promise.reject(new Error('fail'))
-  }
-
-  const q = createQuery({ fetcher })
-  const errorPromise = q.once('key', 'error')
-
-  try {
-    await q.query('key')
-  } catch {
-    // expected
-  }
-
-  const event = await errorPromise
-  expect(event.detail).toBeInstanceOf(Error)
-})
-```
-
----
-
-## Gotchas
-
-- **Always wrap renders in `act()`** — React state updates outside `act()` cause warnings and flaky tests.
-- **Use two `act()` blocks** — one for initial render (triggers Suspense), one for awaiting the query resolution.
-- **`query.next(key)` must be called before render** — it listens for the `refetching` event, which fires during the first render.
-- **Pass `{ query }` directly to hooks** in tests — avoids needing `QueryProvider` in the test tree.
-- **Use `describe.concurrent()`** — tests are independent and safe to run in parallel.
-- **Destructure `expect` from context** — required for concurrent test isolation in Vitest.
-- **Use `// oxlint-disable-next-line`** before `await act(async function () { ... })` — OxLint flags the floating promise pattern.
-- **`vi.fn()` for mock fetchers** — use when you need to assert call counts or arguments.
+Use test-context `expect` in concurrent suites. Keep mutable fixtures local; restore mocks, unsubscribe listeners, and close caller-created channels. Assert expected failures with `await expect(promise).rejects...` rather than swallowing errors. Check `package.json` for the current test/build commands.
