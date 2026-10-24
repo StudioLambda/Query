@@ -1,10 +1,28 @@
 # Changelog
 
+## [3.0.0] - 2026-10-24
+
+### 🐛 Bug Fixes
+
+- [**breaking**] Stabilize fresh React Suspense requests
+
+### 📚 Documentation
+
+- Clarify fresh resource notification configuration
+
+### ⚙️ Miscellaneous Tasks
+
+- Merge main into fresh Suspense fix
+- Merge mutation ordering and broadcast isolation
 ## [2.0.0] - 2026-10-24
 
 ### 🐛 Bug Fixes
 
 - [**breaking**] Require explicit opt-in for React cross-tab broadcasts
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V2.0.0
 ## [1.5.19] - 2026-10-24
 
 ### 🐛 Bug Fixes
