@@ -25,17 +25,46 @@ import {
 /**
  * An instance-owned fresh request and its committed consumer count. The
  * promise follows explicit cache writes; only the owning instance mutates it.
+ * Uncommitted selections, including failed/abandoned renders, stay reachable
+ * until invalidation or instance collection. Counts represent committed leases.
+ *
+ * @example
+ * const instance = createQuery({ fetcher: async () => 'Ada' })
+ * const request = instance.resource<string>('profile', { fresh: true })
+ * const release = request.retain()
+ * try { console.log(await request.promise) } finally { release() }
  */
 interface FreshResource extends QueryResource {
-  /** Pending until first commit, then the latest successful cached request. */
+  /**
+   * Selected promise, updated by cache commits to keep retained readers aligned.
+   * An uncommitted selection can also follow a new imperative fresh request.
+   *
+   * @example
+   * const request = createQuery({ fetcher: async () => 1 }).resource<number>('count', { fresh: true })
+   * console.log(await request.promise) // 1
+   */
   promise: Promise<unknown>
-  /** Active committed consumers; suspended initial renders do not retain. */
+  /**
+   * Number of committed leases, not attempted or suspended render reads.
+   * Every retain must have exactly one release to keep the count accurate.
+   *
+   * @example
+   * const request = createQuery({ fetcher: async () => 1 }).resource('count', { fresh: true })
+   * const release = request.retain() // Adds one committed consumer.
+   * release() // Removes that consumer; eviction is deferred one microtask.
+   */
   consumers: number
 }
 
 /**
  * Ordinary cached reads have no fresh lease to retain. Keeping this function
  * stable also avoids reconnecting React effects on ordinary rerenders.
+ *
+ * @returns A no-op release function matching the fresh-resource protocol.
+ * @example
+ * const request = createQuery({ fetcher: async () => 1 }).resource('count')
+ * const release = request.retain()
+ * release() // Ordinary cache reads require no fresh-selection eviction.
  */
 function retainCachedResource(): () => void {
   return function () {}
@@ -44,6 +73,18 @@ function retainCachedResource(): () => void {
 /**
  * Creates a default fetcher function that performs JSON requests
  * using the provided fetch implementation.
+ * Forwards the request's AbortSignal, rejects non-OK responses with an Error,
+ * and propagates fetch/JSON parsing failures. It does not validate JSON shape.
+ *
+ * @param fetch - Fetch-compatible implementation, retained by the returned function.
+ * @returns A key-to-JSON fetcher suitable for createQuery configuration.
+ * @example
+ * const fetcher = defaultFetcher<{ name: string }>(async () =>
+ *   new Response(JSON.stringify({ name: 'Ada' }), { status: 200 })
+ * )
+ * try {
+ *   console.log(await fetcher('/profile', { signal: new AbortController().signal }))
+ * } catch (error) { console.error(error) }
  */
 export function defaultFetcher<T>(
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
@@ -67,9 +108,14 @@ export function defaultFetcher<T>(
  * Mutations commit in call order per key; independent keys do not wait for
  * one another. Committed mutations and hydration supersede older fetches
  * without changing the results returned to those fetches' callers.
+ * Defaults: JSON fetcher, 2000 ms fetched lifetime, stale reads enabled,
+ * fresh/removeOnError disabled, new Map stores/EventTarget, no channel.
+ * Supplied dependencies are retained. The caller owns broadcast closure and
+ * subscription cleanup; scope names do not provide authorization.
  *
- * @param instanceOptions - Optional cache, fetcher and policy defaults.
- * @returns An instance with no shared process-global request state.
+ * @param instanceOptions - Optional storage, event, and fetch policy overrides.
+ * @returns A client whose methods retain this instance's configuration/state.
+ *
  * @example
  * ```ts
  * const instance = createQuery({ fetcher: async () => 'hello', fresh: true })
@@ -82,41 +128,79 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * Fresh render requests survive discarded initial renders. The map belongs
    * to this instance, never to a process-global React cache. Abandoned reads
    * live until invalidation or instance disposal, like other cached requests.
+   *
+   * @example
+   * const query = createQuery({ fetcher: async () => 1 })
+   * const first = query.resource('count', { fresh: true })
+   * console.log(first === query.resource('count', { fresh: true })) // true
    */
   const freshResources = new Map<string, FreshResource>()
 
   /**
-   * Stores the default expiration function.
+   * Gives fetched values a two-second deduplication lifetime in milliseconds.
+   * Hydration and mutation deliberately use their own zero-lifetime default.
+   *
+   * @example
+   * const query = createQuery({ fetcher: async () => 1 })
+   * await query.query('count')
+   * console.log(query.expiration('count') instanceof Date) // true
    */
   function defaultExpiration() {
     return 2000
   }
 
   /**
-   * Stores the items cache.
+   * Retains resolved result promises and absolute expiration dates.
+   * Configuration may replace the store without migrating its entries.
+   *
+   * @example
+   * const query = createQuery()
+   * query.hydrate('count', 1)
+   * console.log(await query.caches().items.get('count')?.item) // 1
    */
   let itemsCache = instanceOptions?.itemsCache ?? new Map<string, ItemsCacheItem>()
 
   /**
-   * Stores the resolvers cache.
+   * Retains active request promises and their ownership controllers.
+   * Only an owning request may publish completion into shared state.
+   *
+   * @example
+   * console.log(Array.from(createQuery().caches().resolvers.keys())) // []
    */
   let resolversCache = instanceOptions?.resolversCache ?? new Map<string, ResolversCacheItem>()
 
   /**
    * Tracks only pending mutation tails so functional mutations read the
    * previous committed value. Settled tails are removed, including failures.
+   *
+   * @example
+   * const query = createQuery()
+   * await Promise.all([query.mutate('count', 1), query.mutate<number>('count', (n) => (n ?? 0) + 1)])
+   * console.log(await query.snapshot('count')) // 2
    */
   const mutations = new Map<string, Promise<unknown>>()
 
   /**
    * Marks fetch promises invalidated by committed local writes. Weak entries
    * do not retain completed requests or accumulate per-key generations.
+   *
+   * @example
+   * const query = createQuery({ fetcher: async () => 1 })
+   * const pending = query.query('count')
+   * query.hydrate('count', 2)
+   * await pending
+   * console.log(await query.snapshot('count')) // 2
    */
   const supersededFetches = new WeakSet<Promise<unknown>>()
 
   /**
    * Prevents the current fetch from publishing over a committed local write.
    * The fetch still settles normally for callers already awaiting it.
+   * No cancellation is requested by a local write.
+   *
+   * @example
+   * const query = createQuery()
+   * query.hydrate('count', 1) // Marks any older fetch as superseded.
    */
   function supersedeFetch(key: string): void {
     /** Only the resolver active at the local commit loses publication rights. */
@@ -129,6 +213,14 @@ export function createQuery(instanceOptions?: Configuration): Query {
   /**
    * Retires a superseded fetch without deleting a later revalidation's
    * resolver. Returns whether its cache writes and events must be skipped.
+   * Promise identity prevents an old completion from deleting a newer request.
+   *
+   * @example
+   * const query = createQuery({ fetcher: async () => 1 })
+   * const pending = query.query('count')
+   * query.hydrate('count', 2)
+   * await pending
+   * console.log(await query.snapshot('count')) // 2
    */
   function retireSupersededFetch(key: string, promise: Promise<unknown>): boolean {
     if (!supersededFetches.has(promise)) {
@@ -143,28 +235,42 @@ export function createQuery(instanceOptions?: Configuration): Query {
   }
 
   /**
-   * Event manager.
+   * Retains the current target used for keyed local lifecycle events.
+   * Replacing it leaves existing subscribers attached to their old target.
+   *
+   * @example
+   * const events = new EventTarget()
+   * console.log(createQuery({ events }).events() === events) // true
    */
   let events = instanceOptions?.events ?? new EventTarget()
 
   /**
-   * Broadcast channel. This is useful for communicating
-   * between tabs and windows (browser contexts).
+   * Retains an optional caller-owned channel for cross-context event delivery.
+   * No default channel is created. The caller must close a supplied channel
+   * only after all users and subscriptions are done; scope is not authorization.
    *
-   * By default it does not use any broadcast channel.
-   * If a broadcast channel is provided, query
-   * won't close automatically, therefore, the responsibility
-   * of closing the broadcast channel is up to the user.
+   * @example
+   * console.log(createQuery().broadcast()) // undefined
    */
   let broadcast = instanceOptions?.broadcast
 
   /**
-   * Stores the expiration time of an item.
+   * Retains the fetched-value lifetime callback, measured in milliseconds.
+   * Nullish configure values preserve it; a callback returning zero is valid.
+   *
+   * @example
+   * const query = createQuery({ expiration: () => 60000 })
+   * query.configure({ expiration: () => 0 })
    */
   let instanceExpiration = instanceOptions?.expiration ?? defaultExpiration
 
   /**
-   * Determines the fetcher function to use.
+   * Retains the default key-to-value fetcher for future requests.
+   * Per-call fetchers override this without changing the instance default.
+   *
+   * @example
+   * const query = createQuery({ fetcher: async () => 'Ada' })
+   * console.log(await query.query('profile')) // 'Ada'
    */
   let instanceFetcher = instanceOptions?.fetcher ?? defaultFetcher(fetch)
 
@@ -173,20 +279,33 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * If `true`, it will return the previous stale item
    * stored in the cache if it has expired. It will attempt
    * to revalidate it in the background. If `false`, the returned
-   * promise will be the revalidation promise.
+   * promise will be the revalidation promise. This defaults to true.
+   *
+   * @example
+   * const query = createQuery({ stale: false, fetcher: async () => 1 })
+   * console.log(await query.query('count')) // 1
    */
   let instanceStale = instanceOptions?.stale ?? true
 
   /**
    * Removes the stored item if there is an error in the request.
    * By default, we don't remove the item upon failure, only the resolver
-   * is removed from the cache.
+   * is removed from the cache. Superseded requests cannot remove newer items.
+   *
+   * @example
+   * const query = createQuery({ removeOnError: true, fetcher: async () => 1 })
+   * console.log(await query.query('count')) // 1
    */
   let instanceRemoveOnError = instanceOptions?.removeOnError ?? false
 
   /**
    * Determines if the result should be a fresh fetched
-   * instance regardless of any cached value or its expiration time.
+   * instance regardless of any cached value or its expiration time. Render
+   * resources instead share this policy for one retained selection lifetime.
+   *
+   * @example
+   * const query = createQuery({ fresh: true, fetcher: async () => 1 })
+   * console.log(await query.query('count')) // 1
    */
   let instanceFresh = instanceOptions?.fresh ?? false
 
@@ -195,6 +314,13 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * selections; notification-only changes preserve the chosen fetch because
    * event routing does not change its request policy. Existing promises and
    * active transports are not canceled; ordinary caches remain unchanged.
+   * Applies non-nullish settings without resetting unspecified values.
+   * Explicit false updates boolean defaults. Replacing caches or events does
+   * not migrate data/listeners; undefined cannot remove an existing channel.
+   *
+   * @example
+   * const query = createQuery({ fresh: true })
+   * query.configure({ fresh: false, expiration: () => 0 })
    */
   function configure(options?: Configuration): void {
     /** Notification setup must not restart a request selected during render. */
@@ -218,6 +344,12 @@ export function createQuery(instanceOptions?: Configuration): Query {
   /**
    * Writes a resolved cache value and keeps fresh render consumers aligned
    * with hydration, mutation and completed requests from the imperative API.
+   * Both stores retain the same result promise; no data objects are cloned.
+   *
+   * @example
+   * const query = createQuery()
+   * query.hydrate('count', 1)
+   * console.log(await query.snapshot('count')) // 1
    */
   function cacheItem(key: string, value: ItemsCacheItem): void {
     itemsCache.set(key, value)
@@ -232,6 +364,19 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * Selects a stable fresh request without treating a Suspense retry as a new
    * imperative force-fetch. Siblings share the first read's request options.
    * Ordinary requests delegate unchanged to the existing cache policy.
+   * A failed or abandoned uncommitted selection is retained until forget,
+   * request/cache reconfiguration, or instance collection. Notification-only
+   * configure changes preserve it. Consumers must retain only on commit and
+   * release exactly once; final release evicts on the next microtask.
+   *
+   * @param key - Exact key shared by fresh consumers within this instance.
+   * @param options - First fresh reader's policy, ignored by later joiners.
+   * @returns A promise selection and committed-consumer retention function.
+   * @example
+   * const query = createQuery({ fetcher: async () => 1 })
+   * const request = query.resource<number>('count', { fresh: true })
+   * const release = request.retain()
+   * try { console.log(await request.promise) } finally { release() }
    */
   function resource<T = unknown>(key: string, options?: Options<T>): QueryResource<T> {
     /** Per-read freshness overrides the instance default, including false. */
@@ -253,6 +398,13 @@ export function createQuery(instanceOptions?: Configuration): Query {
       /**
        * Retains only committed consumers. Cleanup waits one microtask so
        * StrictMode's synchronous effect replay preserves the same request.
+       * Each returned release must be called exactly once; it is not idempotent.
+       * The identity check prevents late cleanup from removing a newer selection.
+       *
+       * @example
+       * const request = createQuery({ fetcher: async () => 1 }).resource('count', { fresh: true })
+       * const release = request.retain()
+       * release()
        */
       retain() {
         request.consumers += 1
@@ -278,6 +430,11 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * @param key - The cache key associated with the event.
    * @param event - The type of event to emit.
    * @param detail - The payload to include with the event.
+   * @example
+   * const query = createQuery()
+   * const stop = query.subscribe('count', 'hydrated', (event) => console.log(event.detail))
+   * query.emit('count', 'hydrated', 1)
+   * stop()
    */
   function emit<T = unknown>(key: string, event: QueryEvent, detail: T) {
     events.dispatchEvent(new CustomEvent(`${event}:${key}`, { detail }))
@@ -302,6 +459,15 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * information depending on the event type.
    * If there's a pending resolver for that key, the `refetching`
    * event is fired immediately.
+   * The replay is queued in a microtask. Completion events carry values;
+   * refetching/mutating carry promises, and error/aborted carry reasons.
+   *
+   * @returns Cleanup for the keyed listener; it does not close resources.
+   * @example
+   * const query = createQuery()
+   * const stop = query.subscribe('count', 'hydrated', (event) => console.log(event.detail))
+   * query.hydrate('count', 1)
+   * stop()
    */
   function subscribe<T = unknown>(
     key: string,
@@ -349,6 +515,12 @@ export function createQuery(instanceOptions?: Configuration): Query {
     /**
      * Resolves and commits one queued mutation. Resolver and expiration errors
      * propagate to its caller before any cache write or fetch invalidation.
+     * The outer method publishes this promise as the per-key queue tail before
+     * listeners can enqueue further mutations.
+     *
+     * @example
+     * const query = createQuery()
+     * await query.mutate<number>('count', (previous) => (previous ?? 0) + 1)
      */
     async function action(resolver: MutationValue<T>) {
       await previous?.catch(() => {})
@@ -399,13 +571,24 @@ export function createQuery(instanceOptions?: Configuration): Query {
   /**
    * Returns the current snapshot of the given key.
    * If the item is not in the items cache, it will return `undefined`.
+   * Ignores expiration and never fetches. Custom rejected stored promises
+   * propagate their rejection to the caller.
+   *
+   * @example
+   * const query = createQuery()
+   * query.hydrate('count', 1)
+   * console.log(await query.snapshot('count')) // 1
    */
   async function snapshot<T = unknown>(key: string): Promise<T | undefined> {
     return (await itemsCache.get(key)?.item) as T
   }
 
   /**
-   * Returns all keys currently stored in the specified cache.
+   * Copies keys in underlying store order, including expired stored items.
+   * Defaults to the items cache; resolvers enumerates only active slots.
+   *
+   * @example
+   * console.log(createQuery().keys('resolvers')) // []
    */
   function keys(type: CacheType = 'items'): readonly string[] {
     return Array.from(type === 'items' ? itemsCache.keys() : resolversCache.keys())
@@ -417,6 +600,11 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * The fetcher is responsible for using the
    * `AbortSignal` to cancel the job.
    * If no keys are provided, all resolvers are aborted.
+   * Removes selected resolver slots and emits aborted without erasing items.
+   * Fetchers ignoring the signal may continue, but lose publication rights.
+   *
+   * @example
+   * createQuery().abort(['profile', 'settings'], 'navigation')
    */
   function abort(cacheKeys?: string | readonly string[], reason?: unknown): void {
     const resolverKeys =
@@ -438,6 +626,15 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * Forgets resolved items and fresh render selections, including abandoned
    * pending selections. Active transports are not aborted. Omitted keys
    * clear all selections; a pattern matches both item and fresh-resource keys.
+   * Removes each entry before awaiting its result for the forgotten event.
+   * Rejected entries emit undefined; pending entries can delay later removals.
+   * Still-active requests may subsequently repopulate forgotten keys.
+   *
+   * @example
+   * const query = createQuery()
+   * query.hydrate('count', 1)
+   * await query.forget(/^count$/)
+   * console.log(query.keys()) // []
    */
   async function forget(cacheKeys?: string | readonly string[] | RegExp): Promise<void> {
     let itemKeys: readonly string[]
@@ -505,6 +702,10 @@ export function createQuery(instanceOptions?: Configuration): Query {
   /**
    * Returns the expiration date of a given key item.
    * If the item is not in the cache, it will return `undefined`.
+   * Returns the retained Date without cloning; callers must not mutate it.
+   *
+   * @example
+   * console.log(createQuery().expiration('missing')) // undefined
    */
   function expiration(key: string): Date | undefined {
     return itemsCache.get(key)?.expiresAt
@@ -570,6 +771,11 @@ export function createQuery(instanceOptions?: Configuration): Query {
      * their own fetch result (or abort reason).
      * Requests superseded by a local write cannot delay revalidation, even
      * when their fetchers ignore cancellation or remain pending indefinitely.
+     * Fetch/expiration failures reject callers; only the owner emits errors.
+     *
+     * @example
+     * const query = createQuery({ fetcher: async () => 1 })
+     * console.log(await query.query('count', { stale: false })) // 1
      */
     function refetch(key: string): Promise<T> {
       // Check if there's a pending resolver for that data.
@@ -718,21 +924,33 @@ export function createQuery(instanceOptions?: Configuration): Query {
   }
 
   /**
-   * Returns the current cache instances.
+   * Returns live storage references for diagnostics and custom integration.
+   * Direct writes bypass event delivery and request ownership protection.
+   *
+   * @example
+   * console.log(Array.from(createQuery().caches().items.keys())) // []
    */
   function caches(): Caches {
     return { items: itemsCache, resolvers: resolversCache }
   }
 
   /**
-   * Returns the event system.
+   * Exposes the retained EventTarget without wrapping or copying it.
+   * Prefer subscribe() to obtain keyed listener cleanup automatically.
+   *
+   * @example
+   * console.log(createQuery().events() instanceof EventTarget) // true
    */
   function localEvents() {
     return events
   }
 
   /**
-   * Returns the broadcast channel.
+   * Exposes the caller-owned optional channel without creating one.
+   * The query never closes it, even when subscriptions are removed.
+   *
+   * @example
+   * console.log(createQuery().broadcast()) // undefined
    */
   function localBroadcast() {
     return broadcast
@@ -743,6 +961,13 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * to listen for other browser context
    * events and reproduce them in the current
    * context.
+   * Captures the current channel for cleanup even if configure replaces it.
+   * Remote messages only dispatch local events; they do not populate caches.
+   * With no channel this subscription and its cleanup are harmless no-ops.
+   *
+   * @example
+   * const stop = createQuery().subscribeBroadcast()
+   * stop()
    */
   function subscribeBroadcast(): Unsubscriber {
     // Capture the current broadcast reference so that the unsubscriber
@@ -750,6 +975,15 @@ export function createQuery(instanceOptions?: Configuration): Query {
     // configure() replaces the broadcast channel later.
     const currentBroadcast = broadcast
 
+    /**
+     * Replays a received event on the current local target without rebroadcast.
+     * Channel routing is not an authorization boundary; payloads are trusted
+     * according to the caller's same-origin channel sharing policy.
+     *
+     * @example
+     * const stop = createQuery().subscribeBroadcast()
+     * stop() // Disposes the listener that invokes this replay callback.
+     */
     function onBroadcastMessage(message: MessageEvent<BroadcastPayload>) {
       events.dispatchEvent(new CustomEvent(message.data.event, { detail: message.data.detail }))
     }
@@ -771,6 +1005,12 @@ export function createQuery(instanceOptions?: Configuration): Query {
    *
    * @param keys - A single key, array of keys, or object mapping names to keys.
    * @returns A promise that resolves with the fetched value(s).
+   * @param signal - Cancels event waits, not fetch promises already received.
+   * @example
+   * const query = createQuery({ fetcher: async () => 1 })
+   * const pending = query.next<{ count: number }>({ count: 'count' })
+   * await query.query('count')
+   * console.log(await pending) // { count: 1 }
    */
   async function next<T = unknown>(
     keys: string | { [K in keyof T]: string },
@@ -803,6 +1043,16 @@ export function createQuery(instanceOptions?: Configuration): Query {
    *
    * @param keys - A single key or an object mapping property names to keys.
    * @yields The resolved value(s) each time a refetch completes.
+   * No events are buffered while the consumer processes a yielded value.
+   * The finally block cleans up on exit; return() does not interrupt an
+   * already pending next() call waiting for an event or fetch result.
+   * @example
+   * const query = createQuery({ fetcher: async () => 1 })
+   * const values = query.stream<number>('count')
+   * const pending = values.next()
+   * await query.query('count')
+   * console.log((await pending).value) // 1
+   * await values.return(undefined)
    */
   async function* stream<T = unknown>(keys: string | { [K in keyof T]: string }) {
     const controller = new AbortController()
@@ -823,6 +1073,12 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * @param key - The cache key to listen for events on.
    * @param event - The type of event to wait for.
    * @returns A promise that resolves with the event details.
+   * @param signal - Optional cancellation, rejecting with signal.reason.
+   * @example
+   * const query = createQuery()
+   * const pending = query.once<number>('count', 'hydrated')
+   * query.hydrate('count', 1)
+   * console.log((await pending).detail) // 1
    */
   function once<T = unknown>(key: string, event: QueryEvent, signal?: AbortSignal) {
     return new Promise<CustomEventInit<T>>(function (resolve, reject) {
@@ -831,11 +1087,31 @@ export function createQuery(instanceOptions?: Configuration): Query {
         cleanup()
       })
 
+      /**
+       * Releases both listeners after an event or cancellation wins the wait.
+       * Removing an already-removed DOM listener is harmless.
+       *
+       * @example
+       * const query = createQuery()
+       * const pending = query.once('count', 'hydrated')
+       * query.hydrate('count', 1)
+       * await pending // The event path has now released its listeners.
+       */
       function cleanup() {
         unsubscribe()
         signal?.removeEventListener('abort', onAbort)
       }
 
+      /**
+       * Rejects the event wait with the supplied signal's exact abort reason.
+       * Called only when a signal exists, including pre-aborted signals.
+       *
+       * @example
+       * const controller = new AbortController()
+       * const pending = createQuery().once('count', 'hydrated', controller.signal)
+       * controller.abort('navigation')
+       * try { await pending } catch (error) { console.log(error) }
+       */
       function onAbort() {
         cleanup()
         reject(signal!.reason)
@@ -858,6 +1134,15 @@ export function createQuery(instanceOptions?: Configuration): Query {
    * @param key - The cache key to listen for events on.
    * @param event - The type of event to stream.
    * @yields The event details each time the event occurs.
+   * There is no buffering between iterations. Cleanup runs on generator exit;
+   * return() does not interrupt an already pending next() event wait.
+   * @example
+   * const query = createQuery()
+   * const events = query.sequence<number>('count', 'hydrated')
+   * const pending = events.next()
+   * query.hydrate('count', 1)
+   * console.log((await pending).value?.detail) // 1
+   * await events.return(undefined)
    */
   async function* sequence<T = unknown>(key: string, event: QueryEvent) {
     const controller = new AbortController()
