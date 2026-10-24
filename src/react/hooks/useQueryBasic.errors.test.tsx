@@ -8,7 +8,7 @@ import { describe, it, onTestFinished, vi } from 'vitest'
 import { act, Suspense } from 'react'
 import { createRoot, type RootOptions } from 'react-dom/client'
 import { ErrorBoundary } from 'react-error-boundary'
-import { createQuery, type Query } from 'query:index'
+import { createQuery, type FetcherFunction, type Query } from 'query:index'
 import { useQuery, type Resource } from './useQuery'
 
 /**
@@ -80,6 +80,41 @@ function createView(query: Query) {
 
 // React's act queue is global, so these root/transition tests must not overlap.
 describe('useQueryBasic refetch errors', () => {
+  it('preserves a committed fresh resource through failure and recovers on refresh', async ({
+    expect,
+  }) => {
+    /** The initial and failed requests settle only when the test releases them. */
+    const initial = Promise.withResolvers<string>()
+    const refresh = Promise.withResolvers<string>()
+    const error = new Error('fresh refresh failed')
+    const fetcher = vi
+      .fn<FetcherFunction<string>>()
+      .mockReturnValueOnce(initial.promise)
+      .mockReturnValueOnce(refresh.promise)
+      .mockResolvedValueOnce('recovered')
+    const query = createQuery({ fetcher, fresh: true, expiration: () => 0 })
+    const view = createView(query)
+    await view.render('/fresh-failure')
+    await act(async () => initial.resolve('initial'))
+    expect(view.container.innerText).toBe('initial')
+
+    await act(async () => {
+      const assertion = expect(view.resource!.refetch({ fresh: true })).rejects.toBe(error)
+      refresh.reject(error)
+      await assertion
+    })
+    expect(view.container.innerText).toBe('initial')
+    expect(view.container.querySelector('p')?.dataset.pending).toBe('false')
+    expect(view.onCaughtError).not.toHaveBeenCalled()
+
+    await act(async () => {
+      expect(await view.resource!.refetch({ fresh: true })).toBe('recovered')
+    })
+    expect(view.container.innerText).toBe('recovered')
+    expect(view.onCaughtError).not.toHaveBeenCalled()
+    expect(fetcher).toHaveBeenCalledTimes(3)
+  })
+
   it('retains stale rendered data and reports a background error', async ({ expect }) => {
     /** Controlled fetch settlement keeps the refetch subscription observable. */
     const fetch = Promise.withResolvers<string>()
