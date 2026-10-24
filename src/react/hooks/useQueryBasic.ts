@@ -40,6 +40,14 @@ export type BasicResourceOptions<T = unknown> = ContextValue & Options<T> & Quer
  * additional actions (refetch, mutate, forget) or status information.
  * Use useQuery for a more complete solution.
  *
+ * Freshness (from options or the instance) applies to a shared request
+ * lifetime, not each render. Initial retries and same-key fresh consumers
+ * share one request, even after expiration. The last consumer's cleanup
+ * releases it; a later mount starts fresh again. Explicit refetch/query
+ * actions still force new requests. An abandoned initial render remains
+ * reusable until the key is forgotten, request configuration changes, or the
+ * instance is garbage-collected. Notification-only configuration preserves it.
+ *
  * Refetch subscription failures preserve the rendered value; the query
  * instance reports them through its error event. Blocking render promises
  * still reject into the nearest error boundary, and action promises keep
@@ -79,7 +87,7 @@ export function useQueryBasic<T = unknown>(
     useQueryTransitionContext()
 
   const [isLocalPending, startLocalTransition] = useTransition()
-  const { query, subscribe } = useQueryInstance(options)
+  const { resource, subscribe } = useQueryInstance(options)
   const ignoreTransitionContext = oIgnoreTransitionContext ?? cIgnoreTransitionContext ?? false
   const isPending = ignoreTransitionContext ? isLocalPending : (isContextPending ?? isLocalPending)
 
@@ -89,7 +97,8 @@ export function useQueryBasic<T = unknown>(
 
   const clearOnForget = oClearOnForget ?? cClearOnForget ?? false
 
-  const promise = query<T>(key, {
+  /** Instance-owned selection survives initial renders discarded by Suspense. */
+  const { promise, retain } = resource<T>(key, {
     expiration: oExpiration,
     fetcher: oFetcher,
     stale: oStale,
@@ -107,6 +116,8 @@ export function useQueryBasic<T = unknown>(
   if (data !== resolved) {
     setData(resolved)
   }
+
+  useEffect(() => retain(), [retain])
 
   const onResolved = useEffectEvent(function (event: CustomEventInit<T>) {
     startTransition(function () {
@@ -163,13 +174,14 @@ export function useQueryBasic<T = unknown>(
   const onForgotten = useEffectEvent(function () {
     if (clearOnForget) {
       startTransition(async function () {
-        const data = await query<T>(key, {
+        const { promise } = resource<T>(key, {
           expiration: oExpiration,
           fetcher: oFetcher,
           stale: oStale,
           removeOnError: oRemoveOnError,
           fresh: oFresh,
         })
+        const data = await promise
 
         startTransition(function () {
           setData(data)

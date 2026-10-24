@@ -1,10 +1,29 @@
 # Changelog
 
+## [2.0.0] - 2026-10-24
+
+### 🐛 Bug Fixes
+
+- [**breaking**] Require explicit opt-in for React cross-tab broadcasts
+## [1.5.19] - 2026-10-24
+
+### 🐛 Bug Fixes
+
+- Preserve mutation ordering against older fetches
+
+### ⚙️ Miscellaneous Tasks
+
+- Merge main into mutation ordering fix
+- *(release)* V1.5.19
 ## [1.5.18] - 2026-10-24
 
 ### 🐛 Bug Fixes
 
 - Preserve rendered data on background refetch errors
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V1.5.18
 ## [1.5.17] - 2026-10-24
 
 ### 🐛 Bug Fixes

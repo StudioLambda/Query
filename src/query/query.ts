@@ -16,10 +16,30 @@ import {
   type Options,
   type Query,
   type QueryEvent,
+  type QueryResource,
   type SubscribeListener,
   type TriggerFunction,
   type Unsubscriber,
 } from 'query:options'
+
+/**
+ * An instance-owned fresh request and its committed consumer count. The
+ * promise follows explicit cache writes; only the owning instance mutates it.
+ */
+interface FreshResource extends QueryResource {
+  /** Pending until first commit, then the latest successful cached request. */
+  promise: Promise<unknown>
+  /** Active committed consumers; suspended initial renders do not retain. */
+  consumers: number
+}
+
+/**
+ * Ordinary cached reads have no fresh lease to retain. Keeping this function
+ * stable also avoids reconnecting React effects on ordinary rerenders.
+ */
+function retainCachedResource(): () => void {
+  return function () {}
+}
 
 /**
  * Creates a default fetcher function that performs JSON requests
@@ -40,17 +60,31 @@ export function defaultFetcher<T>(
 }
 
 /**
- * Creates an isolated query instance with cache, events, and fetch defaults.
+ * Creates an isolated cache, event system and request lifecycle. React's
+ * bindings use resource() to share fresh requests across Suspense retries;
+ * imperative query() calls retain their force-fresh behavior. Cache and
+ * transport configuration can be supplied or changed through configure().
  * Mutations commit in call order per key; independent keys do not wait for
  * one another. Committed mutations and hydration supersede older fetches
  * without changing the results returned to those fetches' callers.
  *
+ * @param instanceOptions - Optional cache, fetcher and policy defaults.
+ * @returns An instance with no shared process-global request state.
  * @example
- * const client = createQuery({ fetcher: async () => 'server value' })
- * const value = await client.query<string>('profile')
- * await client.mutate('profile', value.toUpperCase())
+ * ```ts
+ * const instance = createQuery({ fetcher: async () => 'hello', fresh: true })
+ * try { console.log(await instance.query<string>('/hello')) }
+ * catch (error) { console.error(error) }
+ * ```
  */
 export function createQuery(instanceOptions?: Configuration): Query {
+  /**
+   * Fresh render requests survive discarded initial renders. The map belongs
+   * to this instance, never to a process-global React cache. Abandoned reads
+   * live until invalidation or instance disposal, like other cached requests.
+   */
+  const freshResources = new Map<string, FreshResource>()
+
   /**
    * Stores the default expiration function.
    */
@@ -157,9 +191,19 @@ export function createQuery(instanceOptions?: Configuration): Query {
   let instanceFresh = instanceOptions?.fresh ?? false
 
   /**
-   * Configures the current instance of query.
+   * Applies supplied defaults. Request/cache configuration invalidates fresh
+   * selections; notification-only changes preserve the chosen fetch because
+   * event routing does not change its request policy. Existing promises and
+   * active transports are not canceled; ordinary caches remain unchanged.
    */
   function configure(options?: Configuration): void {
+    /** Notification setup must not restart a request selected during render. */
+    const changesRequests = Object.keys(options ?? {}).some(
+      (key) => key !== 'broadcast' && key !== 'events'
+    )
+    if (changesRequests) {
+      freshResources.clear()
+    }
     itemsCache = options?.itemsCache ?? itemsCache
     resolversCache = options?.resolversCache ?? resolversCache
     events = options?.events ?? events
@@ -169,6 +213,61 @@ export function createQuery(instanceOptions?: Configuration): Query {
     instanceStale = options?.stale ?? instanceStale
     instanceRemoveOnError = options?.removeOnError ?? instanceRemoveOnError
     instanceFresh = options?.fresh ?? instanceFresh
+  }
+
+  /**
+   * Writes a resolved cache value and keeps fresh render consumers aligned
+   * with hydration, mutation and completed requests from the imperative API.
+   */
+  function cacheItem(key: string, value: ItemsCacheItem): void {
+    itemsCache.set(key, value)
+    /** A live fresh selection must follow the same cache write as new readers. */
+    const resource = freshResources.get(key)
+    if (resource !== undefined) {
+      resource.promise = value.item
+    }
+  }
+
+  /**
+   * Selects a stable fresh request without treating a Suspense retry as a new
+   * imperative force-fetch. Siblings share the first read's request options.
+   * Ordinary requests delegate unchanged to the existing cache policy.
+   */
+  function resource<T = unknown>(key: string, options?: Options<T>): QueryResource<T> {
+    /** Per-read freshness overrides the instance default, including false. */
+    const fresh = options?.fresh ?? instanceFresh
+    if (!fresh) {
+      return { promise: query<T>(key, options), retain: retainCachedResource }
+    }
+
+    /** Retained or not-yet-committed readers share this existing selection. */
+    const cached = freshResources.get(key)
+    if (cached !== undefined) {
+      return cached as QueryResource<T>
+    }
+
+    /** The first reader owns request options for the shared key lifetime. */
+    const request: FreshResource = {
+      promise: query<T>(key, options),
+      consumers: 0,
+      /**
+       * Retains only committed consumers. Cleanup waits one microtask so
+       * StrictMode's synchronous effect replay preserves the same request.
+       */
+      retain() {
+        request.consumers += 1
+        return function () {
+          request.consumers -= 1
+          queueMicrotask(() => {
+            if (request.consumers === 0 && freshResources.get(key) === request) {
+              freshResources.delete(key)
+            }
+          })
+        }
+      },
+    }
+    freshResources.set(key, request)
+    return request as QueryResource<T>
   }
 
   /**
@@ -273,7 +372,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
       expiresAt.setMilliseconds(expiresAt.getMilliseconds() + (options?.expiration?.(item) ?? 0))
 
       supersedeFetch(key)
-      itemsCache.set(key, { item: result, expiresAt })
+      cacheItem(key, { item: result, expiresAt })
       emit(key, 'mutated', item)
 
       return item
@@ -336,9 +435,9 @@ export function createQuery(instanceOptions?: Configuration): Query {
   }
 
   /**
-   * Forgets the given keys from the items cache.
-   * Does not remove any resolvers.
-   * If no keys are provided the items cache is cleared.
+   * Forgets resolved items and fresh render selections, including abandoned
+   * pending selections. Active transports are not aborted. Omitted keys
+   * clear all selections; a pattern matches both item and fresh-resource keys.
    */
   async function forget(cacheKeys?: string | readonly string[] | RegExp): Promise<void> {
     let itemKeys: readonly string[]
@@ -348,12 +447,15 @@ export function createQuery(instanceOptions?: Configuration): Query {
     } else if (Array.isArray(cacheKeys)) {
       itemKeys = cacheKeys
     } else if (cacheKeys instanceof RegExp) {
-      itemKeys = keys('items').filter((key) => key.match(cacheKeys))
+      itemKeys = [...new Set([...keys('items'), ...freshResources.keys()])].filter((key) =>
+        key.match(cacheKeys)
+      )
     } else {
-      itemKeys = keys('items')
+      itemKeys = [...new Set([...keys('items'), ...freshResources.keys()])]
     }
 
     for (const key of itemKeys) {
+      freshResources.delete(key)
       const item = itemsCache.get(key)
 
       if (item !== undefined) {
@@ -395,7 +497,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
 
     for (const key of typeof keys === 'string' ? [keys] : keys) {
       supersedeFetch(key)
-      itemsCache.set(key, { item: result, expiresAt: expiresAt })
+      cacheItem(key, { item: result, expiresAt: expiresAt })
       emit(key, 'hydrated', item)
     }
   }
@@ -517,7 +619,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
             expiresAt.setMilliseconds(expiresAt.getMilliseconds() + expiration(item))
 
             // Set the item to the cache.
-            itemsCache.set(key, { item: result, expiresAt })
+            cacheItem(key, { item: result, expiresAt })
 
             // Removes this request's resolver after its cache write succeeds.
             resolversCache.delete(key)
@@ -554,6 +656,14 @@ export function createQuery(instanceOptions?: Configuration): Query {
 
       // Adds the resolver to the cache.
       resolversCache.set(key, { item: result, controller })
+      /**
+       * Suspended initial readers follow a replacement pending request.
+       * Committed readers keep their last value until a refresh succeeds.
+       */
+      const resource = freshResources.get(key)
+      if (resource !== undefined && resource.consumers === 0) {
+        resource.promise = result
+      }
       queueMicrotask(() => emit(key, 'refetching', result))
 
       // The promise executor runs synchronously,
@@ -763,6 +873,7 @@ export function createQuery(instanceOptions?: Configuration): Query {
 
   return {
     query,
+    resource,
     emit,
     subscribe,
     subscribeBroadcast,
