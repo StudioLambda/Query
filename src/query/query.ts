@@ -192,9 +192,9 @@ export function createQuery(instanceOptions?: Configuration): Query {
 
   /**
    * Applies supplied defaults. Request/cache configuration invalidates fresh
-   * selections; notification-only changes preserve them so a provider can
-   * connect broadcasting while its children are suspended. Existing promises
-   * and active transports are not canceled; ordinary caches remain unchanged.
+   * selections; notification-only changes preserve the chosen fetch because
+   * event routing does not change its request policy. Existing promises and
+   * active transports are not canceled; ordinary caches remain unchanged.
    */
   function configure(options?: Configuration): void {
     /** Notification setup must not restart a request selected during render. */
